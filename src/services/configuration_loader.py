@@ -1,6 +1,9 @@
 import pandas as pd
 import streamlit as st
 
+from services.curtain_config import curtain_control_names as curtain_control
+from services.installation_config import installation_control_names as installation_control
+
 
 def pivot_controls(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
@@ -73,7 +76,7 @@ def _to_checkbox(value):
     return 1 if cleaned in {"1", "true", "yes"} else 0
 
 
-def apply_loaded_config_to_session(pivot_df: pd.DataFrame, data_mapping: dict):
+def apply_loaded_config_to_session(pivot_df: pd.DataFrame):
     if pivot_df.empty:
         return
 
@@ -119,6 +122,10 @@ def apply_loaded_config_to_session(pivot_df: pd.DataFrame, data_mapping: dict):
         "CMBACT2",
         "CMBACT3",
         "CMBACT4",
+        "NUMREMOTEQTY1",
+        "NUMREMOTEQTY2",
+        "NUMREMOTEQTY3",
+        "NUMREMOTEQTY4",
         "CMBFLOORLOOPINSTALL",
         "QTY",
         "CHKLIFTINGFRAME",
@@ -142,16 +149,28 @@ def apply_loaded_config_to_session(pivot_df: pd.DataFrame, data_mapping: dict):
         "CHKSLOPEREQUIRED",
         "CHKCUSTBOTTOMEDGE",
         "CHKCUSTSCREENPRINT",
+        "CHKEMERGZIP",
         "CHKEMERGEZIP",
         "CHKDRIPEDGE",
         "CHKCOMOWEAR",
         "CHKEX35BVSEAL",
         "CMBWINDOWTYPEDEFAULT",
+        "NUMWINDOWSDEFAULT",
         "NUMWINDOWDEFAULT",
         "CMBNUMWINDROWS",
         "CHKUSEDEFAULTWINPERROW",
+        "NUMWINDOWSREQ",
         "NUMWINDOWREQ",
+        "NUMEXTRAWINDOWS",
+        "NUMCURTFINHL",
+        "NUMCURTFINHR",
+        "NUMCURTFINW",
+        "NUMFLOORSLOPE",
+        "CMBFLOORSLOPE",
     }
+    expected_fields.update(curtain_control.WINDOW_ROW_LOCATION_NAMES)
+    expected_fields.update(curtain_control.WINDOW_ROW_TYPE_NAMES)
+    expected_fields.update(installation_control.INSTALLATION_CONTROL_NAMES)
 
     numeric_float_fields = {
         "NUMDOORHEIGHT",
@@ -163,6 +182,7 @@ def apply_loaded_config_to_session(pivot_df: pd.DataFrame, data_mapping: dict):
         "NUMESTPROJECTSONRUN",
         "NUMLUMSUM",
     }
+    numeric_float_fields.update(installation_control.NUMBER_CONTROL_NAMES)
 
     numeric_int_fields = {
         "QTY",
@@ -170,8 +190,15 @@ def apply_loaded_config_to_session(pivot_df: pd.DataFrame, data_mapping: dict):
         "NUMACCOMNIGHT",
         "NUMPERSONINSTALL",
         "NUMWINDOWDEFAULT",
+        "NUMWINDOWSDEFAULT",
         "NUMWINDOWREQ",
+        "NUMWINDOWSREQ",
+        "NUMEXTRAWINDOWS",
         "NUMES40PANELSREQ",
+        "NUMREMOTEQTY1",
+        "NUMREMOTEQTY2",
+        "NUMREMOTEQTY3",
+        "NUMREMOTEQTY4",
     }
 
     checkbox_fields = {
@@ -191,12 +218,14 @@ def apply_loaded_config_to_session(pivot_df: pd.DataFrame, data_mapping: dict):
         "CHKSLOPEREQUIRED",
         "CHKCUSTBOTTOMEDGE",
         "CHKCUSTSCREENPRINT",
+        "CHKEMERGZIP",
         "CHKEMERGEZIP",
         "CHKDRIPEDGE",
         "CHKCOMOWEAR",
         "CHKEX35BVSEAL",
         "CHKUSEDEFAULTWINPERROW",
     }
+    checkbox_fields.update(installation_control.CHECKBOX_CONTROL_NAMES)
 
     for field in expected_fields:
         raw_value = clean_loaded_value(row.get(field))
@@ -215,3 +244,17 @@ def apply_loaded_config_to_session(pivot_df: pd.DataFrame, data_mapping: dict):
 
         else:
             st.session_state[field] = raw_value if raw_value is not None else 0
+
+    if clean_loaded_value(row.get("CHKEMERGZIP")) is None:
+        st.session_state["CHKEMERGZIP"] = st.session_state.get("CHKEMERGEZIP", 0)
+    if clean_loaded_value(row.get("NUMWINDOWSDEFAULT")) is None:
+        st.session_state["NUMWINDOWSDEFAULT"] = st.session_state.get("NUMWINDOWDEFAULT", 0)
+    if clean_loaded_value(row.get("NUMWINDOWSREQ")) is None:
+        st.session_state["NUMWINDOWSREQ"] = st.session_state.get("NUMWINDOWREQ", 0)
+
+    st.session_state["LAST_DEFAULT_DOOR_MODEL"] = st.session_state.get("CMBDOORMODEL", "")
+    st.session_state["LAST_DEFAULT_CURTAIN_SIGNATURE"] = (
+        st.session_state.get("CMBDOORMODEL", ""),
+        st.session_state.get("NUMDOORHEIGHT", 0),
+        st.session_state.get("NUMDOORWIDTH", 0),
+    )

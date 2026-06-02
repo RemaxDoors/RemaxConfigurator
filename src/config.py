@@ -8,11 +8,6 @@ load_dotenv()
 # Base paths
 BASE_DIR = Path(__file__).resolve().parent.parent
 SRC_DIR = BASE_DIR / "src"
-MODEL_DIR = BASE_DIR / "model"
-
-# Model folders
-PRICING_MODEL_DIR = MODEL_DIR / "pricing_model"
-COSTING_MODEL_DIR = MODEL_DIR / "costing_model"
 
 # Database settings
 DB_SERVER = os.getenv("DB_SERVER")
