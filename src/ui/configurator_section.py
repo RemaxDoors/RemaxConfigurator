@@ -245,12 +245,16 @@ def _render_price_summary(
         "Installation/site is not affected by reseller discount."
     )
 
+    net_upgrade_sell = (
+        price_breakdown["material_sell_price"]
+        + price_breakdown["assembly_sell_price"]
+        - price_breakdown["material_discount_sell_price"]
+    )
+
     rows = [
         ("Door Sell Price", money(price_breakdown["base_door_sell_price"]), "door_sell"),
         ("Door Cost", money(price_breakdown["base_door_cost"]), "door"),
-        ("Material Upgrade", money(price_breakdown["material_sell_price"]), "material"),
-        ("Material Discount", money(-price_breakdown["material_discount_sell_price"]), "material_discount"),
-        ("Assembly Upgrades", money(price_breakdown["assembly_sell_price"]), "assembly"),
+        ("Upgrades (Net)", money(net_upgrade_sell), "upgrades_combined"),
         ("Reseller Discount", f"{reseller_discount:.2f}% / {money(discount_amount)}", "reseller_discount"),
         ("Misc Extra Price (p/door)", money(misc_extra_price), "misc_price"),
         ("Misc Extra Cost (p/door)", money(misc_extra_cost), "misc_cost"),
@@ -305,6 +309,8 @@ def _render_selected_price_detail(
             "Door Sell": price_breakdown["base_door_sell_price"],
             "Door Cost": price_breakdown["base_door_cost"],
         }]))
+    elif detail_key == "upgrades_combined":
+        _render_combined_upgrade_breakdown(price_breakdown)
     elif detail_key == "material":
         _render_upgrade_detail(price_breakdown.get("upgrade_lines", []), "material")
     elif detail_key == "material_discount":
@@ -331,6 +337,33 @@ def _render_selected_price_detail(
             "Total Sell": discounted_total_sell_price,
             "Total Cost": final_total_cost,
         }]))
+
+
+def _render_combined_upgrade_breakdown(price_breakdown: dict) -> None:
+    """Shows Assembly Upgrades, Material Upgrades and Material Discounts as
+    separate labelled sections under the combined Upgrades row."""
+
+    upgrade_lines = price_breakdown.get("upgrade_lines", [])
+
+    # Totals summary
+    total_cols = st.columns(3)
+    total_cols[0].metric("Assembly Upgrades",  money(price_breakdown.get("assembly_sell_price", 0)))
+    total_cols[1].metric("Material Upgrades",  money(price_breakdown.get("material_sell_price", 0)))
+    total_cols[2].metric("Material Discounts", money(-price_breakdown.get("material_discount_sell_price", 0)))
+
+    st.divider()
+
+    # Assembly
+    st.markdown("**Assembly Upgrades**")
+    _render_upgrade_detail(upgrade_lines, "assembly")
+
+    # Material
+    st.markdown("**Material Upgrades**")
+    _render_upgrade_detail(upgrade_lines, "material")
+
+    # Discounts
+    st.markdown("**Material Discounts**")
+    _render_upgrade_detail(upgrade_lines, "material_discount")
 
 
 def _render_upgrade_detail(upgrade_lines: list[dict], detail_type: str) -> None:

@@ -34,10 +34,10 @@ def build_upgrade_columns(
     wind_track = str(selected_values.get("CMBWINDTRACK", "") or "").strip()
     brake_ip_basic = str(selected_values.get("CMBBRAKEIPBASIC", "") or "").strip()
     motor_spec = str(selected_values.get("CMBMOTORSPEC", "") or "").strip()
-    motor_clear_coat = str(selected_values.get("CHKMOTORCLEARCOAT", "") or "").strip().upper()
+    motor_clear_coat = _is_checked(selected_values.get("CHKMOTORCLEARCOAT"))
     motor_oride = str(selected_values.get("CMBMOTORORIDE", "") or "").strip()
-    hyperlift = str(selected_values.get("CHKHYPERLIFT", "") or "").strip().upper()
-    hold_open = str(selected_values.get("CHKHOLDOPEN", "") or "").strip().upper()
+    hyperlift = _is_checked(selected_values.get("CHKHYPERLIFT"))
+    hold_open = _is_checked(selected_values.get("CHKHOLDOPEN"))
     door_width = float(selected_values.get("NUMDOORWIDTH", 0) or 0)
     door_height = float(selected_values.get("NUMDOORHEIGHT", 0) or 0)
     es40_fascia = str(selected_values.get("CMBES40FASCIA", "") or "").strip()
@@ -46,11 +46,11 @@ def build_upgrade_columns(
     brush_seal = str(selected_values.get("CMBBRUSHSEAL", "") or "").strip()
     gearbox_heater = str(selected_values.get("CMBGEARBOXHEATER", "") or "").strip()
     heat_trace_leg = str(selected_values.get("CMBHEATTRACELEG", "") or "").strip()
-    interlock = str(selected_values.get("CHKINTERLOCK", "") or "").strip()
+    interlock = _is_checked(selected_values.get("CHKINTERLOCK"))
     rearhood_brushseal = str(selected_values.get("CMBREARHOODBRUSHSEAL", "") or "").strip()
     cust_steel = str(selected_values.get("CMBCUSTSTEEL", "") or "").strip()
     track_config = str(selected_values.get("CMBTRACKCONFIG", "") or "").strip()
-    ex35felt = str(selected_values.get("CHKEX35FELT", "") or "").strip()
+    ex35felt = _is_checked(selected_values.get("CHKEX35FELT"))
     motor_hand  = str(selected_values.get("CMBMOTORHAND", "") or "").strip()
     motor_shroud = str(selected_values.get("CMBMOTORSHROUD", "") or "").strip()
 
@@ -91,14 +91,10 @@ def build_upgrade_columns(
     elsema_remote_4_button_quantity = _elsema_remote_4_button_quantity(selected_values)
     elsema_remote_8_button_quantity = _elsema_remote_8_button_quantity(selected_values)
 
-    excluded_controller_models = [
-        "MOVICHILL",
-        "MOVICHILL-XL",
-        "HS35-THERMIC",
-        "HS50-THERMIC",
-        "MOVIFOLD",
-        "CONCERTINA",
-    ]
+    # ABS: MOVICHILL-XL is NOT excluded per VB (only MOVICHILL is)
+    _excluded_abs = {"MOVICHILL", "HS35-THERMIC", "HS50-THERMIC", "MOVIFOLD", "CONCERTINA"}
+    # RSS (Remax S/S IP66): MOVICHILL-XL IS excluded per VB
+    _excluded_rss = {"MOVICHILL", "MOVICHILL-XL", "HS35-THERMIC", "HS50-THERMIC", "MOVIFOLD", "CONCERTINA"}
 
     # Assembly upgrade rules.
     if ups.startswith("1kVA"):
@@ -137,7 +133,8 @@ def build_upgrade_columns(
             "revision": None,
         })
 
-    if controller_enclosure == "ABS Hi-Box IP66" and door_model not in excluded_controller_models:
+    # ABS Hi-Box IP66 — excluded for MOVICHILL (not MOVICHILL-XL), THERMIC, MOVIFOLD, CONCERTINA
+    if controller_enclosure == "ABS Hi-Box IP66" and door_model not in _excluded_abs:
         part_id = "OPTION-RRD-ENC-CONT403015-ABS"
         part = part_prices.get(part_id, {})
         assembly_upgrades.append({
@@ -149,7 +146,8 @@ def build_upgrade_columns(
             "revision": None,
         })
 
-    if controller_enclosure == "Remax S/S IP66" and door_model not in excluded_controller_models:
+    # Custom S/S IP66 → part OPTION-RRD-ENC-CONT403015-SS (no model exclusion per VB)
+    if controller_enclosure == "Custom S/S IP66":
         part_id = "OPTION-RRD-ENC-CONT403015-SS"
         part = part_prices.get(part_id, {})
         assembly_upgrades.append({
@@ -161,7 +159,8 @@ def build_upgrade_columns(
             "revision": None,
         })
 
-    if controller_enclosure == "Custom S/S IP66" and door_model not in excluded_controller_models:
+    # Remax S/S IP66 → part OPTION-RRD-ENC-CONT403015-RSS — excluded for MOVICHILL-XL too
+    if controller_enclosure == "Remax S/S IP66" and door_model not in _excluded_rss:
         part_id = "OPTION-RRD-ENC-CONT403015-RSS"
         part = part_prices.get(part_id, {})
         assembly_upgrades.append({
@@ -223,7 +222,7 @@ def build_upgrade_columns(
         })
 
     if ("IP66" in brake_ip_basic or motor_spec == "External / Moisture") \
-            and motor_clear_coat != "TRUE" \
+            and not motor_clear_coat \
             and motor_spec != "Aggressive / Corrosive":
         part_id = "RRD-GFA-BRAKEPUPG-IP66"
         part = part_prices.get(part_id, {})
@@ -236,7 +235,7 @@ def build_upgrade_columns(
             "revision": None,
         })
 
-    if motor_clear_coat == "TRUE" or motor_spec == "Aggressive / Corrosive":
+    if motor_clear_coat or motor_spec == "Aggressive / Corrosive":
         part_id = "OPTION-RRD-MOTUPG-AGGRESSIVE"
         part = part_prices.get(part_id, {})
         assembly_upgrades.append({
@@ -542,7 +541,7 @@ def build_upgrade_columns(
             "revision": "",
         })
 
-    if hold_open == "TRUE":
+    if hold_open:
         part_id = "RRD-SWITCH-TOGGLE-22MM"
         part = part_prices.get(part_id, {})
         material_upgrades.append({
@@ -626,7 +625,7 @@ def build_upgrade_columns(
             "revision": None,
         })
         #material discount rules 
-    if hyperlift == "TRUE" and door_model not in ["ES40", "BUGSTOP"]:
+    if hyperlift and door_model not in ["ES40", "BUGSTOP"]:
         part_id = "OPTION-RRD-HYP-DISCOUNT"
         part = part_prices.get(part_id, {})
         if door_model in ["EX35", "EX45"]:
@@ -670,7 +669,7 @@ def build_upgrade_columns(
                 "quantity": 1,
                 "revision": None,
             })
-    if interlock == "TRUE":
+    if interlock:
         part_id = "OPTION-INTERLOCK"
         part = part_prices.get(part_id, {})
         material_upgrades.append({
@@ -748,7 +747,7 @@ def build_upgrade_columns(
     })
             
             
-    if ex35felt  == "TRUE":
+    if ex35felt:
         part_id = "OPTION-RRD-FELTSEAL-PRESSURE"
         part = part_prices.get(part_id, {})
         material_upgrades.append({
@@ -894,6 +893,16 @@ def _elsema_remote_8_button_quantity(selected_values: dict[str, Any]) -> int:
             remote_count += _to_int(selected_values.get(f"NUMREMOTEQTY{index}", 0))
 
     return remote_count
+
+
+def _is_checked(value: Any) -> bool:
+    """Handles all truthy representations a CHK field may hold:
+    Python bool True, integer 1, or strings '1' / 'true' / 'yes'."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value or "").strip().lower() in {"1", "true", "yes"}
 
 
 def _to_int(value: Any) -> int:

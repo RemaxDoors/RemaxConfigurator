@@ -3,7 +3,7 @@ import streamlit as st
 from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, JsCode
 
 from services.data_mapping import money, percent
-from services.quote_state import edit_line, open_new_line, delete_line
+from services.quote_state import edit_line, open_new_line, delete_line, copy_line
 from ui.configured_part_search import render_configured_part_search
 
 
@@ -63,18 +63,27 @@ def _render_line_grid(lines: list[dict]) -> None:
         st.rerun()
 
     selected_line_number = st.session_state.get("SELECTED_ESTIMATE_LINE")
-    action_col1, action_col2, action_col3 = st.columns([1, 1, 4])
+    action_col1, action_col2, action_col3, action_col4 = st.columns([1, 1, 1, 3])
     action_col1.button(
-        "Edit Selected",
+        "✏️ Edit",
         disabled=selected_line_number is None,
         on_click=_edit_selected_line,
+        use_container_width=True,
     )
     action_col2.button(
-        "Delete Selected",
+        "📋 Copy",
+        disabled=selected_line_number is None,
+        on_click=_copy_selected_line,
+        help="Duplicate this line with identical configuration and pricing",
+        use_container_width=True,
+    )
+    action_col3.button(
+        "🗑️ Delete",
         disabled=selected_line_number is None,
         on_click=_delete_selected_line,
+        use_container_width=True,
     )
-    action_col3.caption("Double-click a line to open it in the configurator.")
+    action_col4.caption("Click a row to select it · Double-click to open in configurator")
 
 
 def _line_grid_dataframe(lines: list[dict]) -> pd.DataFrame:
@@ -138,6 +147,13 @@ def _edit_selected_line() -> None:
         return
 
     edit_line(int(selected_line_number))
+
+
+def _copy_selected_line() -> None:
+    selected_line_number = st.session_state.get("SELECTED_ESTIMATE_LINE")
+    if selected_line_number is None:
+        return
+    copy_line(int(selected_line_number))
 
 
 def _delete_selected_line() -> None:

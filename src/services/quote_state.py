@@ -47,6 +47,20 @@ def edit_line(line_number: int) -> None:
     st.session_state["estimate_mode"] = "configurator"
 
 
+def copy_line(line_number: int) -> None:
+    """Duplicate an existing estimate line, appending it at the end with all
+    controls and pricing preserved exactly."""
+    import copy
+
+    original = _find_line(line_number)
+    if original is None:
+        return
+
+    new_line = copy.deepcopy(original)
+    new_line["Line"] = _next_line_number()
+    st.session_state["estimate_lines"].append(new_line)
+
+
 def delete_line(line_number: int) -> None:
     line = _find_line(line_number)
     if line is None:
