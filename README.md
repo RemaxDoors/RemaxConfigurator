@@ -3,6 +3,8 @@
 A **Streamlit-based** door configurator and estimator built for the REMAX sales team.  
 It replaces manual M1 configurator screens with a fast, rules-driven web interface that produces accurate, consistent pricing from live M1 SQL data.
 
+> **Project status (proof of concept).** The app **reads live from M1** (pricing, parts, historical quotes/orders, customers) and produces multi-line estimates with price, cost and margin. It is currently **read-only against M1** — configuration is exported to Excel for M1 import. **Write-back to M1** (custom `uQuotes` / `uQuoteLines` / `uConfiguratorValues`) and **HubSpot integration** are planned and out of the current build. Configurator rules are coded in the application, not read from M1. See `Documents/RemaxConfigurator_Proof_Of_Concept.docx` for full scope, roadmap and costing.
+
 ---
 
 ## 🚀 Key Features
@@ -111,16 +113,19 @@ Generates an **Excel file** compatible with M1 parameter import structure:
 src/
 ├── app.py                          # Entry point — routes estimate vs configurator mode
 ├── config.py                       # DB + API config from .env
+├── m1_client.py                    # M1 REST API auth headers (API_ID / API_KEY)
 ├── repositories/
-│   ├── sql_service.py              # SQLAlchemy engine
-│   ├── pricing_lookup.py           # All price lookups + dimension calculations
+│   ├── sql_service.py              # SQLAlchemy engine (mssql+pyodbc)
+│   ├── pricing_lookup.py           # All price lookups + curtain dimension calculations
 │   ├── quote_repository.py         # Search quotes & sales orders; load historical controls
-│   └── customer_repository.py
+│   └── customer_repository.py      # Customer + ship-to location lookups
 ├── services/
-│   ├── quote_state.py              # Estimate line state management
-│   ├── export_service.py           # Excel export
+│   ├── quote_state.py              # Estimate line state management (add/edit/copy/delete)
+│   ├── export_service.py           # Excel export (M1ParameterList sheet)
 │   ├── data_mapping.py             # mapped_select, get_value, money, percent helpers
 │   ├── configuration_loader.py     # Reload saved M1 config into session
+│   ├── m1_user_inputs.py           # Build M1 User Inputs frame (xaiControlName / xaiValue)
+│   ├── hubspot_prefill.py          # Prefill customer/ship-to from HubSpot payload (stub)
 │   ├── movidor_door_config/        # Door options, defaults, upgrade rules, validation
 │   ├── curtain_config/             # Curtain options, defaults, panel calc, upgrade rules
 │   └── installation_config/        # Installation options, defaults, quantity rule engine
@@ -129,8 +134,9 @@ src/
     ├── door_section.py             # Door config tabs
     ├── curtain_section.py          # Curtain config + panel auto-calc
     ├── installation_section.py     # Installation config
-    ├── estimate_lines.py           # Estimate line grid
     ├── estimate_header.py          # Quote/customer header
+    ├── estimate_lines.py           # Estimate line grid + totals
+    ├── header_section.py           # Customer/ship-to search header
     ├── customer_picker.py          # Customer search
     └── configured_part_search.py   # Search & reload historical configs
 ```
@@ -142,7 +148,7 @@ src/
 ### Prerequisites
 - Python 3.11+
 - M1 SQL Server database access
-- ODBC Driver 17 for SQL Server
+- ODBC Driver 17 or 18 for SQL Server (local dev defaults to 17; the Azure host installs `msodbcsql18` via `startup.sh`)
 
 ### Environment variables (`.env`)
 ```env
@@ -165,6 +171,19 @@ API_URL=your_api_url
 pip install -r requirements.txt
 streamlit run src/app.py
 ```
+
+---
+
+## ☁️ Deployment
+
+Deployed to **Azure App Service** via GitHub Actions.
+
+- **Workflow:** `.github/workflows/main_rapid-door-estimator.yml` — builds and deploys on push to `main`.
+- **Startup:** `startup.sh` installs the Microsoft ODBC driver (`msodbcsql18`) and launches Streamlit on port `8000`:
+  ```bash
+  python -m streamlit run src/app.py --server.port 8000 --server.address 0.0.0.0
+  ```
+- **Secrets/config:** database and API values are supplied via environment variables / App Service settings (never commit `.env`).
 
 ---
 
