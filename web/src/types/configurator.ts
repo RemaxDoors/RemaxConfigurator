@@ -55,7 +55,15 @@ export interface ConfiguratorParameter {
  * `controlName` is pre-set to `value`. Maps to a uCfgDefaults row.
  */
 export interface ConfiguratorDefault {
-  doorModel: string;
+  /**
+   * The door model this default applies to, or `null` for a row that is not
+   * tied to one model. A null row is either a *conditional* default (its
+   * conditions live in uCfgDefaultConditions and only the API can evaluate
+   * them) or a *manual* one such as freight, which must never be applied
+   * automatically. Neither may be pre-filled by the form — ask the API via
+   * /defaults/resolve instead.
+   */
+  doorModel: string | null;
   controlName: string;
   value: string;
 }

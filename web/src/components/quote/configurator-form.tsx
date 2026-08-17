@@ -142,6 +142,11 @@ export function ConfiguratorForm({
     (model: string, base: Record<string, string>) => {
       const next: Record<string, string> = { ...base, CMBDOORMODEL: model };
       for (const d of configurator?.defaults ?? []) {
+        // Rows with no door model are conditional or manual defaults. They are
+        // resolved by the API (/defaults/resolve) because only it can evaluate
+        // their conditions, and manual ones like freight must not be applied at
+        // all until the user asks. Skipping them here is deliberate.
+        if (!d.doorModel) continue;
         if (d.doorModel.toUpperCase() === model.toUpperCase()) {
           next[d.controlName] = d.value;
         }

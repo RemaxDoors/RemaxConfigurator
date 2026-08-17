@@ -16,16 +16,35 @@ export const DEFAULT_TEMPLATE_CSV = [
   "HS35,CMBTRAFFICLIGHT,No",
 ].join("\r\n");
 
+/**
+ * A default read from CSV always names a door model — the parser rejects rows
+ * without one. That is narrower than ConfiguratorDefault, whose doorModel is
+ * nullable for conditional and manual rows, and the distinction matters: only
+ * per-model rows can be round-tripped through a spreadsheet.
+ */
+export type ImportedDefault = ConfiguratorDefault & { doorModel: string };
+
 export interface DefaultImportParse {
   columnError?: string;
-  valid: ConfiguratorDefault[];
+  valid: ImportedDefault[];
   errors: RowError[];
 }
 
+/**
+ * Export the per-model defaults.
+ *
+ * Rows with no door model are deliberately left out. They are conditional or
+ * manual defaults whose behaviour lives in uCfgDefaultConditions and the
+ * IsManual flag, none of which fits in these three columns — exporting them
+ * would produce rows that re-import as ordinary per-model defaults and quietly
+ * change what the configurator does.
+ */
 export function defaultsToCsv(defaults: ConfiguratorDefault[]): string {
   return toCsv(
     [...DEFAULT_CSV_COLUMNS],
-    defaults.map((d) => [d.doorModel, d.controlName, d.value])
+    defaults
+      .filter((d) => d.doorModel)
+      .map((d) => [d.doorModel as string, d.controlName, d.value])
   );
 }
 
@@ -54,7 +73,7 @@ export function parseDefaultCsv(text: string): DefaultImportParse {
     };
   }
 
-  const valid: ConfiguratorDefault[] = [];
+  const valid: ImportedDefault[] = [];
   const errors: RowError[] = [];
   const seen = new Set<string>();
   for (let r = 1; r < rows.length; r++) {

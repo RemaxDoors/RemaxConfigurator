@@ -207,9 +207,13 @@ export default function ConfiguratorSetupPage() {
   }, [rules, configuratorId]);
   const visibleRules = rules.filter((r) => r.configuratorId === configuratorId);
   const defaults = selected?.defaults ?? [];
-  const defaultModels = Array.from(new Set(defaults.map((d) => d.doorModel))).sort();
+  // A null door model means the row is conditional or manual, not per-model.
+  const ALL_MODELS = "(all models)";
+  const defaultModels = Array.from(
+    new Set(defaults.map((d) => d.doorModel ?? ALL_MODELS))
+  ).sort();
   const shownDefaults = defaultModel
-    ? defaults.filter((d) => d.doorModel === defaultModel)
+    ? defaults.filter((d) => (d.doorModel ?? ALL_MODELS) === defaultModel)
     : defaults;
 
   // ---- parameter handlers ----
@@ -390,9 +394,14 @@ export default function ConfiguratorSetupPage() {
     );
     const removingDefaults = defaults
       .filter(
-        (d) => !keepDef.has(`${d.doorModel}|${d.controlName}`.toUpperCase())
+        (d) =>
+          !keepDef.has(`${d.doorModel ?? ""}|${d.controlName}`.toUpperCase())
       )
-      .map((d) => `${d.doorModel} · ${d.controlName} = ${d.value}`);
+      .map(
+        (d) =>
+          `${d.doorModel ?? ALL_MODELS} · ${d.controlName} = ${d.value}` +
+          (d.doorModel ? "" : "   (conditional/manual — not in the file)")
+      );
     const okDefaults = await confirmImport({
       noun: "defaults",
       keeping: parsed.valid.length,
@@ -1051,7 +1060,9 @@ export default function ConfiguratorSetupPage() {
                     shownDefaults.map((d, i) => (
                       <TableRow key={`${d.doorModel}-${d.controlName}-${i}`}>
                         <TableCell>
-                          <Badge variant="secondary">{d.doorModel}</Badge>
+                          <Badge variant={d.doorModel ? "secondary" : "outline"}>
+                            {d.doorModel ?? ALL_MODELS}
+                          </Badge>
                         </TableCell>
                         <TableCell className="font-mono text-xs">
                           {d.controlName}
