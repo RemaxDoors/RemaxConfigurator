@@ -13,7 +13,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { label: "Quotes", href: "/#quotes" },
   { label: "Orders", href: "/#orders" },
   { label: "M1", href: "/#m1" },
-  { label: "Simpro", href: "/#simpro" },
+  { label: "Simpro", href: "/simpro" },
 ];
 
 export const NEW_QUOTE_HREF = "/quote/new";

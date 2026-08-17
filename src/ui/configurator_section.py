@@ -4,6 +4,7 @@ import streamlit as st
 from repositories.pricing_lookup import DoorPriceLookup
 from services.quote_state import close_configurator, save_active_line
 from services.data_mapping import mapped_select, money, percent
+from services.export_service import generate_excel_export
 from services.curtain_config import curtain_control_names as curtain_control
 from services.curtain_config.curtain_defaults import apply_default_selections as apply_curtain_defaults
 from services.installation_config import installation_control_names as install_control
@@ -745,23 +746,41 @@ def render_configurator() -> None:
     price_breakdown["installation_site_description"] = installation_site_description
     price_breakdown["installation_lines"] = installation_lines
 
-    st.button(
-        "Save Line to Estimate",
-        type="primary",
-        on_click=save_active_line,
-        args=(
-            door_result,
-            price_breakdown,
-            discounted_unit_sell_price,
-            discounted_total_sell_price,
-            reseller_discount,
-        ),
-        disabled=(
-            not validation_result.get("is_valid", True)
-            or not installation_result["validation_result"].get("is_valid", True)
-            or not curtain_result["validation_result"].get("is_valid", True)
-        ),
+    configured_part_details = door_result["door_controls_values"]
+    export_file_name = (
+        f"{selected_config['part_id'] or 'configured_part'}_"
+        f"{int(door_result['NUMDOORHEIGHT'] or 0)}Hx{int(door_result['NUMDOORWIDTH'] or 0)}W.xlsx"
     )
+
+    save_col, export_col, _ = st.columns([1.4, 1.4, 3], vertical_alignment="center")
+    with save_col:
+        st.button(
+            "Save Line to Estimate",
+            type="primary",
+            on_click=save_active_line,
+            args=(
+                door_result,
+                price_breakdown,
+                discounted_unit_sell_price,
+                discounted_total_sell_price,
+                reseller_discount,
+            ),
+            disabled=(
+                not validation_result.get("is_valid", True)
+                or not installation_result["validation_result"].get("is_valid", True)
+                or not curtain_result["validation_result"].get("is_valid", True)
+            ),
+            use_container_width=True,
+        )
+    with export_col:
+        st.download_button(
+            "📥 Export to Excel",
+            data=generate_excel_export(configured_part_details),
+            file_name=export_file_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            help="Download the configured part details as an M1 parameter list (Excel).",
+            use_container_width=True,
+        )
 
     _render_selected_price_detail(
         price_breakdown=price_breakdown,

@@ -28,6 +28,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useTheme } from "@/components/theme/theme-provider";
+import { M1FieldMapping } from "@/components/settings/m1-field-mapping";
 import { cn } from "@/lib/utils";
 import { CONFIGURATOR_SETUP_HREF } from "@/lib/navigation";
 import type { Theme } from "@/lib/theme";
@@ -144,6 +145,9 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* M1 field mapping */}
+      <M1FieldMapping />
     </div>
   );
 }
