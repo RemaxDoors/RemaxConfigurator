@@ -103,7 +103,63 @@ def _matches(value, needle: str, mode: str) -> bool:
         return v == n
     if mode == "contains":
         return n in v
+    if mode == "ends":
+        return v.endswith(n)
     return v.startswith(n)
+
+
+_PREDICATE_MODES = {
+    "starts": "starts", "startswith": "starts",
+    "has": "contains", "contains": "contains",
+    "is": "equals", "equals": "equals",
+    "ends": "ends", "endswith": "ends",
+}
+
+
+def _predicate(spec: str):
+    """Parse one countWhere predicate, e.g. 'starts:Induction Loop - ' or '!has:Existing'.
+
+    Returns (negate, mode, text). Defaults to 'contains' when no prefix is
+    given, so countWhere(group("X"), "Loop") reads the obvious way.
+    """
+    raw = _text(spec)
+    negate = raw.startswith("!")
+    if negate:
+        raw = raw[1:]
+    mode, sep, needle = raw.partition(":")
+    key = mode.strip().lower()
+    if sep and key in _PREDICATE_MODES:
+        return negate, _PREDICATE_MODES[key], needle
+    # no recognised prefix — treat the whole thing as a "contains" test, so a
+    # value that legitimately contains a colon still works.
+    return negate, "contains", raw
+
+
+def _count_where(slots: Slots, specs: list[str]) -> float:
+    """Count slots satisfying EVERY predicate.
+
+    This is the general form; countEquals / countStartsWith / countContains are
+    the one-predicate shorthands. Two positive tests on the same slot value is
+    what the shorthands cannot express:
+
+        M1: Left(v,17) = "Induction Loop - " AND Instr(v,"Only") > 0
+        ->  countWhere(group("CMBACT"), "starts:Induction Loop - ", "has:Only")
+
+    Checking them per slot matters: two separate counts would be satisfied by a
+    loop in one slot and "…Only" in a different one.
+    """
+    parsed = [_predicate(s) for s in specs]
+    total = 0
+    for _, value in slots:
+        if not _text(value).strip():
+            continue
+        if all(
+            (not _matches(value, needle, mode)) if negate
+            else _matches(value, needle, mode)
+            for negate, mode, needle in parsed
+        ):
+            total += 1
+    return float(total)
 
 
 def _slot_count(slots: Slots, needle: str, mode: str, exclude: str | None) -> float:
@@ -241,6 +297,16 @@ def _eval_raw(formula: str, values: dict):
                 if not args:
                     raise FormulaError('group needs a control prefix, e.g. group("CMBACT")')
                 return _group(_text(ev(args[0])), lookup)
+            if name == "countwhere":
+                # countWhere(group("CMBACT"), "starts:Induction Loop - ", "has:Only")
+                if len(args) < 2:
+                    raise FormulaError(
+                        'countWhere needs a group and at least one test, e.g. '
+                        'countWhere(group("CMBACT"), "starts:Induction Loop - ")'
+                    )
+                return _count_where(
+                    _as_slots(ev(args[0])), [_text(ev(a)) for a in args[1:]]
+                )
             if name in ("countequals", "countstartswith", "countcontains"):
                 if len(args) < 2:
                     raise FormulaError(f"{name} needs controls and a value")
@@ -317,6 +383,16 @@ if __name__ == "__main__":
         "CMBACT3": "Existing Induction Loop", "NUMREMOTEQTY3": 0,
         "CMBACT4": "", "NUMREMOTEQTY4": 0,
     }
+    TRAP = {
+        "CMBACT1": "Elsema Receiver Card Only",
+        "CMBACT2": "Induction Loop - Door Side Only",
+        "CMBACT3": "", "CMBACT4": "",
+    }
+    BOTH_SIDES = {
+        "CMBACT1": "Elsema Receiver Card Only",
+        "CMBACT2": "Induction Loop - Both Sides",
+        "CMBACT3": "", "CMBACT4": "",
+    }
     cases = [
         # '@@@@ if floor loops selected, keep. cmbAct1234.
         ('countStartsWith(group("CMBACT"), "Induction Loop - ")', ACTS, 1),
@@ -330,6 +406,14 @@ if __name__ == "__main__":
         ('countEquals(CMBACT1, CMBACT2, "Induction Loop - Single")', ACTS, 1),
         # a group that isn't in the configuration counts as zero, not an error
         ('countStartsWith(group("CMBNOPE"), "x")', ACTS, 0),
+        # countWhere: two positive tests on the SAME slot value, which the
+        # shorthands cannot express. "Elsema Receiver Card Only" must not count
+        # towards the single-side floor-loop discount.
+        ('countWhere(group("CMBACT"), "starts:Induction Loop - ", "has:Only")', TRAP, 1),
+        ('countWhere(group("CMBACT"), "starts:Induction Loop - ", "has:Only")', BOTH_SIDES, 0),
+        # and it reproduces each shorthand
+        ('countWhere(group("CMBACT"), "has:Loop", "!has:Existing")', ACTS, 1),
+        ('countWhere(group("CMBACT"), "is:Elsema Remote - 2 Button")', ACTS, 1),
     ]
     failures = 0
     for expr, values, expected in cases:

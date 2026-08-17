@@ -21,6 +21,12 @@ export interface SlotCount {
   values: string;
   /** Skip slots that also contain this, e.g. "Existing". */
   exclude: string;
+  /**
+   * A second thing the SAME slot value must also contain, e.g. only count
+   * "Induction Loop - …" values that also say "Only". Needed because two
+   * separate counts would match a loop in one slot and "…Only" in another.
+   */
+  alsoContains: string;
   compare: ">" | ">=" | "=" | "<";
   amount: string;
 }
@@ -30,6 +36,7 @@ export const EMPTY_SLOT_COUNT: SlotCount = {
   match: "starts",
   values: "",
   exclude: "",
+  alsoContains: "",
   compare: ">",
   amount: "0",
 };
@@ -42,6 +49,13 @@ const FN: Record<SlotCount["match"], string> = {
 
 const quote = (s: string) => `"${s.replace(/"/g, "")}"`;
 
+/** Predicate prefix used by countWhere for each match mode. */
+const PREDICATE: Record<SlotCount["match"], string> = {
+  starts: "starts",
+  equals: "is",
+  contains: "has",
+};
+
 /** One count expression — several values become a sum of counts. */
 function countExpr(c: SlotCount): string {
   const values = c.values
@@ -49,11 +63,24 @@ function countExpr(c: SlotCount): string {
     .map((v) => v.trim())
     .filter(Boolean);
   if (!c.prefix || values.length === 0) return "";
-  const args = (v: string) =>
-    [`group(${quote(c.prefix)})`, quote(v), c.exclude.trim() ? quote(c.exclude.trim()) : ""]
+  const also = c.alsoContains.trim();
+  const exclude = c.exclude.trim();
+  const group = `group(${quote(c.prefix)})`;
+
+  // countWhere is the general form; it is the only one that can require two
+  // things of the same slot value. Stick to the shorthands otherwise so
+  // existing saved formulas keep their familiar shape.
+  const terms = values.map((v) => {
+    if (also) {
+      const preds = [`${PREDICATE[c.match]}:${v}`, `has:${also}`];
+      if (exclude) preds.push(`!has:${exclude}`);
+      return `countWhere(${group}, ${preds.map(quote).join(", ")})`;
+    }
+    const args = [group, quote(v), exclude ? quote(exclude) : ""]
       .filter(Boolean)
       .join(", ");
-  const terms = values.map((v) => `${FN[c.match]}(${args(v)})`);
+    return `${FN[c.match]}(${args})`;
+  });
   return terms.length === 1 ? terms[0] : terms.join(" + ");
 }
 
@@ -74,24 +101,82 @@ export function parseSlotFormula(formula: string): SlotCount | null {
   const body = tail[1].replace(/^\((.*)\)$/, "$1");
 
   const terms = body.split("+").map((t) => t.trim());
-  const parsed = terms.map((t) =>
-    t.match(
+
+  /** One term -> {kind, prefix, value, exclude, also} or null if unparseable. */
+  const readTerm = (t: string) => {
+    const short = t.match(
       /^count(StartsWith|Equals|Contains)\(\s*group\(\s*"([^"]*)"\s*\)\s*,\s*"([^"]*)"\s*(?:,\s*"([^"]*)"\s*)?\)$/i
-    )
-  );
+    );
+    if (short) {
+      return {
+        kind: short[1].toLowerCase(),
+        prefix: short[2],
+        value: short[3],
+        exclude: short[4] ?? "",
+        also: "",
+      };
+    }
+    const where = t.match(
+      /^countWhere\(\s*group\(\s*"([^"]*)"\s*\)\s*,\s*((?:"[^"]*"\s*,?\s*)+)\)$/i
+    );
+    if (!where) return null;
+    const preds = (where[2].match(/"[^"]*"/g) ?? []).map((p) => p.slice(1, -1));
+    const KIND: Record<string, string> = {
+      starts: "startswith",
+      is: "equals",
+      has: "contains",
+    };
+    let kind = "";
+    let value = "";
+    let also = "";
+    let exclude = "";
+    for (const p of preds) {
+      const neg = p.startsWith("!");
+      const [mode, ...rest] = (neg ? p.slice(1) : p).split(":");
+      const text = rest.join(":");
+      if (neg) {
+        if (mode !== "has" || exclude) return null; // only !has is representable
+        exclude = text;
+      } else if (!kind) {
+        if (!(mode in KIND)) return null;
+        kind = KIND[mode];
+        value = text;
+      } else if (mode === "has" && !also) {
+        also = text;
+      } else {
+        return null; // more predicates than this builder can show
+      }
+    }
+    if (!kind) return null;
+    return { kind, prefix: where[1], value, exclude, also };
+  };
+
+  const parsed = terms.map(readTerm);
   if (parsed.some((p) => !p)) return null;
 
-  const kinds = new Set(parsed.map((p) => p![1].toLowerCase()));
-  const prefixes = new Set(parsed.map((p) => p![2].toUpperCase()));
-  const excludes = new Set(parsed.map((p) => p![4] ?? ""));
-  if (kinds.size !== 1 || prefixes.size !== 1 || excludes.size !== 1) return null;
+  const uniq = (fn: (p: NonNullable<typeof parsed[0]>) => string) =>
+    new Set(parsed.map((p) => fn(p!)));
+  if (
+    uniq((p) => p.kind).size !== 1 ||
+    uniq((p) => p.prefix.toUpperCase()).size !== 1 ||
+    uniq((p) => p.exclude).size !== 1 ||
+    uniq((p) => p.also).size !== 1
+  ) {
+    return null;
+  }
 
-  const kind = parsed[0]![1].toLowerCase();
+  const first = parsed[0]!;
   return {
-    prefix: parsed[0]![2],
-    match: kind === "equals" ? "equals" : kind === "contains" ? "contains" : "starts",
-    values: parsed.map((p) => p![3]).join(", "),
-    exclude: parsed[0]![4] ?? "",
+    prefix: first.prefix,
+    match:
+      first.kind === "equals"
+        ? "equals"
+        : first.kind === "contains"
+          ? "contains"
+          : "starts",
+    values: parsed.map((p) => p!.value).join(", "),
+    exclude: first.exclude,
+    alsoContains: first.also,
     compare: tail[2] as SlotCount["compare"],
     amount: tail[3],
   };
@@ -159,6 +244,15 @@ export function SlotCounter({
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-[140px] flex-1">
+          <Label className="text-xs">and also containing</Label>
+          <Input
+            className="h-9"
+            value={value.alsoContains}
+            onChange={(e) => set({ alsoContains: e.target.value })}
+            placeholder="optional, e.g. Only"
+          />
+        </div>
         <div className="min-w-[140px] flex-1">
           <Label className="text-xs">but not containing</Label>
           <Input
