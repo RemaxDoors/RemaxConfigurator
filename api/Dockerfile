@@ -34,11 +34,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Includes app/pricing_rules — the door and installation rules used to live in
+# the Streamlit tree and were reached via sys.path, which meant this image was
+# incomplete without it. They are part of the package now.
 COPY app ./app
-
-# The configurator reuses the pure rule modules from the Streamlit app.
-# Uncomment if you deploy the API with those rules bundled:
-# COPY ../src /src
 
 EXPOSE 8000
 

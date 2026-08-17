@@ -267,6 +267,7 @@ each file restores parameters, options, rules and conditions exactly.
 │   │   ├── config_write.py       writes uCfg* tables + change log
 │   │   ├── validation_engine.py  condition evaluation
 │   │   ├── m1_pricing.py         door + part prices from M1
+│   │   ├── pricing_rules/        upgrade + installation rules (moved from src/)
 │   │   └── routers/
 │   └── Dockerfile                includes msodbcsql18
 ├── web/                  Next.js front end
@@ -279,5 +280,18 @@ each file restores parameters, options, rules and conditions exactly.
 └── .github/workflows/    Azure deployments
 ```
 
-`api/m1_pricing.py` still imports rule modules from `src/`, so the Streamlit app
-cannot be deleted yet. Removing that import is what unblocks its retirement.
+### Retiring Streamlit
+
+The dependency between the two apps now runs the *other* way. `api/` is
+self-contained; the pricing rules live in `api/app/pricing_rules/`, and the
+three modules left behind in `src/services/` are thin shims that load them
+through `src/services/_pricing_bridge.py`.
+
+That bridge exists because both packages would otherwise be called `app` —
+Streamlit's entry point is `src/app.py`, so whichever lands on `sys.path` first
+wins. The bridge loads the package straight off disk under its own name instead.
+
+To retire Streamlit: delete `src/`, the three shims go with it, and nothing in
+`api/` changes. Deleting `api/app/pricing_rules/` is a separate, later job — it
+needs the DB rules in `uCfgRules` to be proven at parity first, since a silent
+difference there is a wrong quote.

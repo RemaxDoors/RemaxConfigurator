@@ -2,30 +2,19 @@
 
 - Door price/cost: uSellPriceMatrixs (smallest matrix cell that fits W×H).
 - Part price/cost: PartUnitSalePrices (+ Parts / PartRevisions).
-- Upgrade / installation parts come from the proven Streamlit rule engine
-  (pure modules, imported from ../../src), then priced from M1.
+- Upgrade / installation parts come from app.pricing_rules, then priced from M1.
 """
-import os
-import sys
 import urllib.parse
 
 from sqlalchemy import create_engine, text
 
 from . import settings
+from .pricing_rules import build_installation_lines, build_upgrade_columns
 
-# Make the Streamlit rule modules importable (they are pure — no streamlit).
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-
-try:
-    from services.movidor_door_config.movidor_upgrade_rules import build_upgrade_columns
-    from services.installation_config.installation_rules import build_installation_lines
-    _RULES_OK = True
-except Exception:  # pragma: no cover - pricing still returns the door on failure
-    build_upgrade_columns = None
-    build_installation_lines = None
-    _RULES_OK = False
+# Kept so callers can still branch on rule availability; the rules are part of
+# this package now, so importing them cannot fail at runtime the way the old
+# sys.path lookup into ../../src could.
+_RULES_OK = True
 
 _engine = None
 
