@@ -12,7 +12,7 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_DRIVER = os.getenv("DB_DRIVER", "ODBC Driver 17 for SQL Server")
 
 # App-owned config DB (uCfg* tables) — same server as M1, different database.
-CONFIG_DB_NAME = os.getenv("CONFIG_DB_NAME", "new")
+CONFIG_DB_NAME = os.getenv("CONFIG_DB_NAME", "RP_config")
 
 # CORS — origins allowed to call this API directly (the Next dev server).
 ALLOWED_ORIGINS = [

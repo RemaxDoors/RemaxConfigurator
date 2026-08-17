@@ -9,7 +9,7 @@
 #   2. Create a Linux Web App, "Publish: Container", pointing at that registry.
 #   3. Configuration > Application settings:
 #        DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD   (M1 SQL Server)
-#        CONFIG_DB_NAME = new
+#        CONFIG_DB_NAME = RP_config
 #        DB_DRIVER      = ODBC Driver 18 for SQL Server   (the one in the image)
 #        ALLOWED_ORIGINS= https://<your-web-app>.azurewebsites.net
 #        WEBSITES_PORT  = 8000

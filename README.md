@@ -8,7 +8,7 @@ keeps its configurator definition in a database rather than in Python code.
 ┌──────────────┐   HTTPS   ┌──────────────┐   ODBC   ┌────────────────────┐
 │  web/        │ ────────► │  api/        │ ───────► │  SQL Server        │
 │  Next.js 14  │           │  FastAPI     │          │  • M1_RP  (read)   │
-│  App Router  │ ◄──────── │  SQLAlchemy  │ ◄─────── │  • new    (config) │
+│  App Router  │ ◄──────── │  SQLAlchemy  │ ◄─────── │  • RP_config (cfg) │
 └──────────────┘           └──────────────┘          └────────────────────┘
    browser                    all M1 access             uCfg* tables
 ```
@@ -20,7 +20,7 @@ credentials stay server-side and never reach the browser.
 | Database | Owner | Purpose |
 |---|---|---|
 | `M1_RP` | ECI M1 | Read-only source of truth: part prices, door price matrices, customers |
-| `new` | this app | `uCfg*` tables — parameters, options, defaults, rules, validations |
+| `RP_config` | this app | `uCfg*` tables — parameters, options, defaults, rules, validations |
 
 ---
 
@@ -35,20 +35,27 @@ credentials stay server-side and never reach the browser.
 
 ### 1. Configure
 
-Both tiers read from gitignored `.env` files. Copy the examples and fill them in:
+Both tiers read from gitignored `.env` files.
+
+> **The API's settings come from the repo-root `.env`**, which it shares with the
+> Streamlit app. `settings.py` calls `load_dotenv()` with no path, and
+> python-dotenv walks *up* from the working directory and stops at the first
+> `.env` it finds. Since `run-api.cmd` starts uvicorn from `api/`, creating an
+> `api/.env` **shadows the root one** — the API then sees only what that file
+> contains and loses the M1 credentials entirely. Put API settings in the root
+> `.env` unless you intend to move all of them there.
 
 ```bash
-cp api/.env.example api/.env
 cp web/.env.example web/.env
 ```
 
-`api/.env`:
+Root `.env` (see `api/.env.example` for the full list):
 
 | Setting | Example | Notes |
 |---|---|---|
 | `DB_SERVER` | `GIZEME` | M1 SQL Server host |
 | `DB_NAME` | `M1_RP` | The M1 database |
-| `CONFIG_DB_NAME` | `new` | The app's own config database |
+| `CONFIG_DB_NAME` | `RP_config` | The app's own config database |
 | `DB_USER` / `DB_PASSWORD` | | SQL auth |
 | `DB_DRIVER` | `ODBC Driver 17 for SQL Server` | **18** inside the Docker image |
 | `ALLOWED_ORIGINS` | `http://localhost:3000` | CORS |
@@ -63,25 +70,25 @@ cp web/.env.example web/.env
 
 ### 2. Create the config database
 
-Run once against the `new` database, in this order:
+Run once against the `RP_config` database, in this order:
 
 ```bash
-sqlcmd -S <server> -d new -i db/uCfg_configurator_schema.sql
-sqlcmd -S <server> -d new -i db/uCfg_pricing_rules_schema.sql
-sqlcmd -S <server> -d new -i db/uCfg_add_section.sql
-sqlcmd -S <server> -d new -i db/uCfg_add_audit_columns.sql
-sqlcmd -S <server> -d new -i db/uCfg_change_log.sql
-sqlcmd -S <server> -d new -i db/uCfg_configurator_links.sql
-sqlcmd -S <server> -d new -i db/uCfg_field_map.sql
-sqlcmd -S <server> -d new -i db/uCfg_rules_add_quantity_fields.sql
-sqlcmd -S <server> -d new -i db/uCfg_rules_add_condition_formula.sql
+sqlcmd -S <server> -d RP_config -i db/uCfg_configurator_schema.sql
+sqlcmd -S <server> -d RP_config -i db/uCfg_pricing_rules_schema.sql
+sqlcmd -S <server> -d RP_config -i db/uCfg_add_section.sql
+sqlcmd -S <server> -d RP_config -i db/uCfg_add_audit_columns.sql
+sqlcmd -S <server> -d RP_config -i db/uCfg_change_log.sql
+sqlcmd -S <server> -d RP_config -i db/uCfg_configurator_links.sql
+sqlcmd -S <server> -d RP_config -i db/uCfg_field_map.sql
+sqlcmd -S <server> -d RP_config -i db/uCfg_rules_add_quantity_fields.sql
+sqlcmd -S <server> -d RP_config -i db/uCfg_rules_add_condition_formula.sql
 ```
 
 Then seed the configurator definitions:
 
 ```bash
 python db/migrate_all.py
-sqlcmd -S <server> -d new -i db/seed_movidor_generated.sql
+sqlcmd -S <server> -d RP_config -i db/seed_movidor_generated.sql
 ```
 
 All migrations are re-runnable.
@@ -164,7 +171,7 @@ No startup command needed — the Dockerfile's `CMD` already binds `$PORT`.
 |---|---|
 | `DB_SERVER`, `DB_NAME`, `DB_USER` | M1 connection |
 | `DB_PASSWORD` | **Key Vault reference**, not a literal |
-| `CONFIG_DB_NAME` | `new` |
+| `CONFIG_DB_NAME` | `RP_config` |
 | `DB_DRIVER` | `ODBC Driver 18 for SQL Server` — the version in the image |
 | `ALLOWED_ORIGINS` | `https://<your-web-app>.azurewebsites.net` |
 | `WEBSITES_PORT` | `8000` |
