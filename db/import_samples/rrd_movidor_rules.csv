@@ -1,0 +1,63 @@
+Rule ID,Name,Result Part,Revision,Category,Quantity,Unit,Active,When,Notes
+RRD-01,1kVA UPS,EL-UPS-1KVAASS,,ASSEMBLY_UPGRADE,1,Per Door,Yes,CMBUPS starts with 1kVA,
+RRD-02,2kVA UPS,EL-UPS-2KVAASS,,ASSEMBLY_UPGRADE,1,Per Door,Yes,CMBUPS starts with 2kVA,
+RRD-03,3kVA UPS,EL-UPS-3KVAASS,,ASSEMBLY_UPGRADE,1,Per Door,Yes,CMBUPS starts with 3kVA,
+RRD-04,ABS Hi-Box IP66,OPTION-RRD-ENC-CONT403015-ABS,,ASSEMBLY_UPGRADE,1,Per Door,Yes,"CMBCONTROLLERENCLOSURE = ABS Hi-Box IP66 AND CMBDOORMODEL not in MOVICHILL, HS35-THERMIC, HS50-THERMIC, MOVIFOLD, CONCERTINA",
+RRD-05,Custom Stainless-Steel IP66,OPTION-RRD-ENC-CONT403015-SS,,ASSEMBLY_UPGRADE,1,Per Door,Yes,CMBCONTROLLERENCLOSURE = Custom S/S IP66,
+RRD-06,Remax Stainless-Steel IP66,OPTION-RRD-ENC-CONT403015-RSS,,ASSEMBLY_UPGRADE,1,Per Door,Yes,"CMBCONTROLLERENCLOSURE = Remax S/S IP66 AND CMBDOORMODEL not in MOVICHILL, MOVICHILL-XL, HS35-THERMIC, HS50-THERMIC, MOVIFOLD, CONCERTINA",
+RRD-07,Two-Level PE Beams,RRD-PEBASS-D,,ASSEMBLY_UPGRADE,1,Per Door,Yes,CMBPEBEAMS = 2 Level PE,
+RRD-08,Heat Trace Hood,OPTION-RRD-FREEZERPACK,,ASSEMBLY_UPGRADE,1,Per Door,Yes,CMBHEATTRACEHOOD = Yes,
+RRD-09,Wind Track,OPTION-RRD-HWTRK,,ASSEMBLY_UPGRADE,1,Per Door,Yes,CMBWINDTRACK = Yes,Qty formula: ceil(NUMDOORHEIGHT / 1000)
+RRD-10,IP66 Brake Upgrade,RRD-GFA-BRAKEPUPG-IP66,,ASSEMBLY_UPGRADE,1,Per Door,Yes,(CMBBRAKEIPBASIC contains IP66 AND CHKMOTORCLEARCOAT is not checked AND CMBMOTORSPEC != Aggressive / Corrosive) OR (CMBMOTORSPEC = External / Moisture AND CHKMOTORCLEARCOAT is not checked),
+RRD-11,Aggressive Environment Motor,OPTION-RRD-MOTUPG-AGGRESSIVE,,ASSEMBLY_UPGRADE,1,Per Door,Yes,(CHKMOTORCLEARCOAT is checked) OR (CMBMOTORSPEC = Aggressive / Corrosive),
+RRD-12,ES40 Wide Fascia,RRD-FASASS-ES40-4,,ASSEMBLY_UPGRADE,1,Per Door,Yes,CMBDOORMODEL = ES40 AND NUMDOORWIDTH > 3000 AND CMBES40FASCIA = Yes,
+RRD-13,Induction Loop - Concertina/Movifold,OPTION-SENS-FLASS,CONCERT/M-FOLD,ASSEMBLY_UPGRADE,1,Per Door,Yes,"CMBDOORMODEL in CONCERTINA, MOVIFOLD",Also requires an activation starting 'Induction Loop -'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-14,Induction Loop - Thermal Models,OPTION-SENS-FLASS,EXCLUDE BOX,ASSEMBLY_UPGRADE,1,Per Door,Yes,"CMBDOORMODEL in HS50-THERMIC, HS35-THERMIC, MOVICHILL",Also requires an activation starting 'Induction Loop -'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-15,Induction Loop - Standard Models,OPTION-SENS-FLASS,FULL KIT,ASSEMBLY_UPGRADE,1,Per Door,Yes,"CMBDOORMODEL not in CONCERTINA, MOVIFOLD, HS50-THERMIC, HS35-THERMIC, MOVICHILL",Also requires an activation starting 'Induction Loop -'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-16,Existing Induction Loop,OPTION-SENS-FLASS-EXISTING,,ASSEMBLY_UPGRADE,1,Per Door,Yes,,Any of CMBACT1-CMBACT5 = Existing Induction Loop. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-17,Traffic Light - Rapid Door,OPTION-RRD-TLS-4PC,,ASSEMBLY_UPGRADE,1,Per Door,Yes,"CMBTRAFFICLIGHT != No AND CMBDOORMODEL not in CONCERTINA, MOVIFOLD",Also requires Traffic Light not blank.
+RRD-18,Traffic Light - Concertina/Movifold,OPTION-INDDR-TLS-2PCRM,,ASSEMBLY_UPGRADE,1,Per Door,Yes,"CMBTRAFFICLIGHT = Yes AND CMBDOORMODEL in CONCERTINA, MOVIFOLD",
+RRD-19,Powder-Coat Finish,OPTION-POWDERCOAT,,ASSEMBLY_UPGRADE,1,Per Door,Yes,"CMBCOLOURFINISHTYPE in Powdercoat, Painting",Fires when the finish type is not blank.
+RRD-20,Brush Seal - EX,OPTION-BBSUPG,EX,ASSEMBLY_UPGRADE,1,Per Door,Yes,CMBBRUSHSEAL not contains Std AND CMBBRUSHSEAL not contains None AND CMBDOORMODEL contains EX,
+RRD-21,Brush Seal - HS25,OPTION-BBSUPG,HS25,ASSEMBLY_UPGRADE,1,Per Door,Yes,CMBBRUSHSEAL not contains Std AND CMBBRUSHSEAL not contains None AND CMBDOORMODEL = HS25,
+RRD-22,Brush Seal - HS35,OPTION-BBSUPG,HS35,ASSEMBLY_UPGRADE,1,Per Door,Yes,CMBBRUSHSEAL not contains Std AND CMBBRUSHSEAL not contains None AND CMBDOORMODEL = HS35,
+RRD-23,Brush Seal - HS50/HS65,OPTION-BBSUPG,HS65,ASSEMBLY_UPGRADE,1,Per Door,Yes,"CMBBRUSHSEAL not contains Std AND CMBBRUSHSEAL not contains None AND CMBDOORMODEL in HS50, HS65",
+RRD-24,Brush Seal - Other Model,OPTION-BBSUPG,,ASSEMBLY_UPGRADE,1,Per Door,Yes,"CMBBRUSHSEAL not contains Std AND CMBBRUSHSEAL not contains None AND CMBDOORMODEL not in HS25, HS35, HS50, HS65",Fallback: models that do not match a revision rule above.
+RRD-25,Right-Hand Stainless-Steel Motor Cover,RRD-MOTCOV-CONC-RH,E,ASSEMBLY_UPGRADE,1,Per Door,Yes,"CMBDOORMODEL in MOVIFOLD, CONCERTINA AND CMBMOTORHAND = Right AND CMBMOTORSHROUD = Yes - Stainless Steel Upgrade",
+RRD-26,Two LZRS25 Sensors,SENS-LZRS25,,MATERIAL_UPGRADE,1,Per Door,Yes,CMBPEBEAMS = 2x LZRS25,
+RRD-27,IXIO Long Stalk,RRD-IXIO-LONGASS,,ASSEMBLY_UPGRADE,1,Per Door,Yes,,Qty = count of CMBRADAR1/2 = 'IXIO Sensor - Long Stalk'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-28,IXIO Short Stalk,RRD-IXIO-SHASS,,ASSEMBLY_UPGRADE,1,Per Door,Yes,,Qty = count of CMBRADAR1/2 = 'IXIO Sensor - Short Stalk'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-29,IXIO No Stalk,SENS-IXIODT1,,ASSEMBLY_UPGRADE,1,Per Door,Yes,,Qty = count of CMBRADAR1/2 = 'IXIO Sensor - No Stalk'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-30,Condor Long Stalk,RRD-COND-LONGASS,,ASSEMBLY_UPGRADE,1,Per Door,Yes,,Qty = count of CMBRADAR1/2 = 'Condor Radar - Long Stalk'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-31,Condor Short Stalk,RRD-COND-SHASS,,ASSEMBLY_UPGRADE,1,Per Door,Yes,,Qty = count of CMBRADAR1/2 = 'Condor Radar - Short Stalk'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-32,Condor No Stalk,SENS-COND,,MATERIAL_UPGRADE,1,Per Door,Yes,,Qty = count of CMBRADAR1/2 = 'Condor Radar - No Stalk'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-33,Falcon Long Stalk,RRD-FALC-LONGASS,,ASSEMBLY_UPGRADE,1,Per Door,Yes,,Qty = count of CMBRADAR1/2 = 'Falcon Radar - Long Stalk'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-34,Falcon Short Stalk,RRD-FALC-SHASS,,ASSEMBLY_UPGRADE,1,Per Door,Yes,,Qty = count of CMBRADAR1/2 = 'Falcon Radar - Short Stalk'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-35,Falcon No Stalk,SENS-FALC,,MATERIAL_UPGRADE,1,Per Door,Yes,,Qty = count of CMBRADAR1/2 = 'Falcon Radar - No Stalk'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-36,Light Curtain,OPTION-LIGHT CURTAIN,,MATERIAL_UPGRADE,1,Per Door,Yes,"CMBPEBEAMS contains Curtain AND CMBDOORMODEL not contains EX AND CMBDOORMODEL not in MOVIFOLD, CONCERTINA",
+RRD-37,Pull Cord,PCSW,,MATERIAL_UPGRADE,1,Per Door,Yes,,Qty = count of CMBACT1-4 starting 'Pull Cord'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-38,Magic Switch - In Wall,SENS-MAGSW-IW,,MATERIAL_UPGRADE,1,Per Door,Yes,,Qty from NUMREMOTEQTY where activation = 'Magic Switch - In Wall'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-39,Magic Switch Cable,EL-CAB-1.5140.24CSECWH,,MATERIAL_UPGRADE,1,Per Door,Yes,,Added x1 with RRD-38. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-40,Magic Switch - IP65,SENS-MAGSW-IP65,,MATERIAL_UPGRADE,1,Per Door,Yes,,Qty from NUMREMOTEQTY where activation = 'Magic Switch - IP65 Housing'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-41,Elsema Receiver,RRD-ELREC1C,,MATERIAL_UPGRADE,1,Per Door,Yes,,Any CMBACT1-4 starts with 'Elsema Remote' or 'Elsema Receiver'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-42,Pentacode Receiver,RRD-ELREC1C-PC,,MATERIAL_UPGRADE,1,Per Door,Yes,,Any CMBACT1-4 starts with 'Pentacode - 2' or 'Pentacode - 4'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-43,Pentacode Two-Button Remote,RRD-ELREM2C-PC,,MATERIAL_UPGRADE,1,Per Door,Yes,,"Qty from NUMREMOTEQTY, activation starts 'Pentacode - 2'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor."
+RRD-44,Pentacode Four-Button Remote,RRD-ELREM1C-PC,,MATERIAL_UPGRADE,1,Per Door,Yes,,"Qty from NUMREMOTEQTY, activation starts 'Pentacode - 4'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor."
+RRD-45,Elsema One-Button Remote,RRD-ELREM1C,,MATERIAL_UPGRADE,1,Per Door,Yes,,"Qty from NUMREMOTEQTY, activation starts 'Elsema Remote - 1'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor."
+RRD-46,Elsema Two-Button Remote,RRD-ELREM2C,,MATERIAL_UPGRADE,1,Per Door,Yes,,"Qty from NUMREMOTEQTY, activation starts 'Elsema Remote - 2'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor."
+RRD-47,Elsema Four-Button Remote,RRD-ELREM4C,,MATERIAL_UPGRADE,1,Per Door,Yes,,"Qty from NUMREMOTEQTY, activation starts 'Elsema Remote - 4'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor."
+RRD-48,Elsema Eight-Button Remote,RRD-ELREM8C,,MATERIAL_UPGRADE,1,Per Door,Yes,,"Qty from NUMREMOTEQTY, activation starts 'Elsema Remote - 8'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor."
+RRD-49,Hold Open Switch,RRD-SWITCH-TOGGLE-22MM,,MATERIAL_UPGRADE,1,Per Door,Yes,CHKHOLDOPEN is checked,
+RRD-50,Interlock,OPTION-INTERLOCK,,MATERIAL_UPGRADE,1,Per Door,Yes,CHKINTERLOCK is checked,
+RRD-51,Chain Operator,OPTION-CHAIN-OPERATOR,,MATERIAL_UPGRADE,1,Per Door,Yes,"CMBMOTORORIDE = Chain Drive AND CMBDOORMODEL not in HS65, HS50, HS50-THERMIC, CONCERTINA, MOVIFOLD",
+RRD-52,Rear-Hood Brush Seal,OPTION-REARHOOD-BBSUPG,,MATERIAL_UPGRADE,1,Per Door,Yes,CMBREARHOODBRUSHSEAL contains Yes,
+RRD-53,Concealed SOB - Large,OPTION-SOB-CONCEALED,HS65,MATERIAL_UPGRADE,1,Per Door,Yes,"CMBCUSTSTEEL contains SOB- AND CMBTRACKCONFIG = Concealed AND CMBDOORMODEL in HS50, HS50-THERMIC, HS65",
+RRD-54,Concealed SOB - Standard,OPTION-SOB-CONCEALED,HS35,MATERIAL_UPGRADE,1,Per Door,Yes,"CMBCUSTSTEEL contains SOB- AND CMBTRACKCONFIG = Concealed AND CMBDOORMODEL not in CONCERTINA, MOVIFOLD, HS50, HS50-THERMIC, HS65",
+RRD-55,EX35 Felt Seal,OPTION-RRD-FELTSEAL-PRESSURE,,MATERIAL_UPGRADE,1,Per Door,Yes,CHKEX35FELT is checked,
+RRD-56,Hyperlift Discount - Small,OPTION-RRD-HYP-DISCOUNT,SML,MATERIAL_DISCOUNT,1,Per Door,Yes,"CHKHYPERLIFT is checked AND CMBDOORMODEL in EX35, EX45",
+RRD-57,Hyperlift Discount - Medium,OPTION-RRD-HYP-DISCOUNT,MED,MATERIAL_DISCOUNT,1,Per Door,Yes,"CHKHYPERLIFT is checked AND CMBDOORMODEL in HS35, HS35-THERMIC",
+RRD-58,Hyperlift Discount - Large,OPTION-RRD-HYP-DISCOUNT,LGE,MATERIAL_DISCOUNT,1,Per Door,Yes,"CHKHYPERLIFT is checked AND CMBDOORMODEL not in ES40, BUGSTOP, EX35, EX45, HS35, HS35-THERMIC",
+RRD-59,Heating Discount - IP54,OPTION-RRD-HEAT1-DISCOUNT,,MATERIAL_DISCOUNT,1,Per Door,Yes,"CMBDOORMODEL in MOVICHILL, HS35-THERMIC, HS50-THERMIC AND CMBGEARBOXHEATER = No AND CMBHEATTRACEHOOD = No AND CMBHEATTRACELEG = No AND CMBCONTROLLERENCLOSURE = Std ABS IP54",
+RRD-60,Heating Discount - IP66,OPTION-RRD-HEAT2-DISCOUNT,,MATERIAL_DISCOUNT,1,Per Door,Yes,"CMBDOORMODEL in MOVICHILL, HS35-THERMIC, HS50-THERMIC AND CMBGEARBOXHEATER = No AND CMBHEATTRACEHOOD = No AND CMBHEATTRACELEG = No AND CMBCONTROLLERENCLOSURE contains IP66",
+RRD-61,Single Induction Loop Discount,OPTION-RRD-SINGLELOOP-DISCOUNT,,MATERIAL_DISCOUNT,1,Per Door,Yes,,Activation starts 'Induction Loop -' AND contains 'Only'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.
+RRD-62,Floor Loop Cutting,FLOOR LOOP CUTTING,,INSTALLATION,1,Per Door,Yes,,Any CMBACT1-4 contains 'Induction Loop -'. Multi-slot: applies across CMBACT1-CMBACT4 / CMBRADAR1-2; set the condition per slot in the editor.

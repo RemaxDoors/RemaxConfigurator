@@ -1,0 +1,52 @@
+Control Name,Label,Type,Options
+CMBDOORMODEL,Door Model,Dropdown,|ES40|EX35|EX45|HS35|HS35-THERMIC|HS50|HS50-THERMIC|HS65|MOVICHILL|MOVICHILL-XL|MOVIFOLD|CONCERTINA
+NUMDOORHEIGHT,Door Height (mm),Number,
+NUMDOORWIDTH,Door Width (mm),Number,
+QTY,Quantity,Number,
+CMBGPOISO,GPO / Isolator,Dropdown,GPO|Isolator
+CMBMOTORORIDE,Hand Crank / Chain Drive,Dropdown,|Hand Crank|Chain Drive
+CMBTRACKCONFIG,Tracks Proud / Conc?,Dropdown,Proud|Concealed
+CMBWINDTRACK,High Wind Tracks Required,Dropdown,|Yes|No|Not Available
+CMBELECSPEC,Electrical Spec,Dropdown,|Standard|Carwash
+CMBPOWERSUPPLY,Power Supply,Dropdown,|1P10A=1-Ph 10A + N + E|1P15A=1-Ph 15A + N + E|1P20A=1-Ph 20A + N + E|3P10A=3-Ph 10A + N + E|3P15A=3-Ph 15A + N + E|3P20A=3-Ph 20A + N + E
+CMBCONTROLLERENCLOSURE,Controller Enclosure,Dropdown,|Std ABS IP54|ABS Hi-Box IP66|Remax S/S IP66|Powdercoated IP66 (S/S)
+CMBMOTORSHROUD,Motor Shroud,Dropdown,No|Yes - Stainless Steel Upgrade
+CMBMOTORSPEC,Brake / VSD Protection,Dropdown,|IP65 Std|IP66 Brake Cover
+CMBBRUSHSEAL,Brush Seal,Dropdown,
+CMBTRAFFICLIGHT,Traffic Light,Dropdown,No|Yes
+CMBPEBEAMS,PE Beam,Dropdown,1 Level PE|2 Level PE|Light Curtain - 1830mm|1 Level - Slimline|2x LZRS25
+CMBUPS,UPS,Dropdown,No UPS|1kVA UPS - 10A|2kVA UPS - 10A|3kVA UPS - 15A
+CMBCUSTSTEEL,Custom Steel Work,Dropdown,No|PACKER-DADO=Packers - Dado|PACKERS=Packers - Full Perimeter|SOB-1FG=1-Fold 3mm Gal|SOB-4FG=3mm Gal Post (Roller Shutter)|Yes - Custom Steelwork
+CMBREARHOODBRUSHSEAL,Rear Hood Brush Seal,Dropdown,|No|Yes - 50mm|Yes - 100mm|Yes - 175mm
+CMBSPECIALCONDUIT,Conduit,Dropdown,|Standard=Standard - PVC Grey|Smooth Walled Sheathed - PVC Grey|Corrugated - PVC Orange=Corrugated - PVC Orange (DVP)|50mm Box Duct=50mm Box Duct - White|Other=Other - See Custom Notes
+CMBCOLOURFINISHTYPE,Powdercoat / Painting,Dropdown,|Powdercoat|Painting
+CMBES40FASCIA,Fascia,Dropdown,|Yes|No
+CMBES40VSDMTR,VSD Motor,Dropdown,|Yes - Hyperlift|No - GFA DOL|Yes - GFA VSD
+CMBHEATTRACELEG,Heat Trace Legs,Dropdown,|Yes|No
+CMBGEARBOXHEATER,Gearbox Heater,Dropdown,|Yes|No
+CMBHEATTRACEHOOD,Heat Trace In Hood,Dropdown,|Yes|No
+CMBFELTSEAL,Felt Seal,Dropdown,|Yes|No
+CMBPED1,Pedestrian Button 1,Dropdown,Not Required|Door Column Left|Door Column Right|Side Cover Left|Side Cover Right
+CMBPED2,Pedestrian Button 2,Dropdown,Not Required|Door Column Left|Door Column Right|Side Cover Left|Side Cover Right
+CMBRADAR1,Door Side Radar,Dropdown,Not Required|Falcon Radar - No Stalk|Falcon Radar - Short Stalk|Falcon Radar - Long Stalk|Condor Radar - No Stalk|Condor Radar - Short Stalk|Condor Radar - Long Stalk|IXIO Sensor - No Stalk|IXIO Sensor - Short Stalk|IXIO Sensor - Long Stalk
+CMBRADAR2,Non-Door Side Radar,Dropdown,Not Required|Falcon Radar - No Stalk|Falcon Radar - Short Stalk|Falcon Radar - Long Stalk|Condor Radar - No Stalk|Condor Radar - Short Stalk|Condor Radar - Long Stalk|IXIO Sensor - No Stalk|IXIO Sensor - Short Stalk|IXIO Sensor - Long Stalk
+CMBACT1,Activation 1,Dropdown,|Not Required|Elsema Receiver Card Only|Elsema Remote - 1 Channel|Elsema Remote - 2 Channel|Elsema Remote - 4 Channel|Induction Loop - Door Side Only|Induction Loop - Non Door Side Only|Induction Loop - Both Sides|Existing Induction Loop=Module Only - Existing Floor Loop/s|Magic Switch - In Wall|Magic Switch - IP65 Housing|Pedestrian Switch - Custom Notes|Pull Cord - Door Side|Pull Cord - Non Door Side|Pentacode - 2 button Remote|Pentacode - 4 button Remote
+CMBACT2,Activation 2,Dropdown,|Not Required|Elsema Receiver Card Only|Elsema Remote - 1 Channel|Elsema Remote - 2 Channel|Elsema Remote - 4 Channel|Induction Loop - Door Side Only|Induction Loop - Non Door Side Only|Induction Loop - Both Sides|Existing Induction Loop=Module Only - Existing Floor Loop/s|Magic Switch - In Wall|Magic Switch - IP65 Housing|Pedestrian Switch - Custom Notes|Pull Cord - Door Side|Pull Cord - Non Door Side|Pentacode - 2 button Remote|Pentacode - 4 button Remote
+CMBACT3,Activation 3,Dropdown,|Not Required|Elsema Receiver Card Only|Elsema Remote - 1 Channel|Elsema Remote - 2 Channel|Elsema Remote - 4 Channel|Induction Loop - Door Side Only|Induction Loop - Non Door Side Only|Induction Loop - Both Sides|Existing Induction Loop=Module Only - Existing Floor Loop/s|Magic Switch - In Wall|Magic Switch - IP65 Housing|Pedestrian Switch - Custom Notes|Pull Cord - Door Side|Pull Cord - Non Door Side|Pentacode - 2 button Remote|Pentacode - 4 button Remote
+CMBACT4,Activation 4,Dropdown,|Not Required|Elsema Receiver Card Only|Elsema Remote - 1 Channel|Elsema Remote - 2 Channel|Elsema Remote - 4 Channel|Induction Loop - Door Side Only|Induction Loop - Non Door Side Only|Induction Loop - Both Sides|Existing Induction Loop=Module Only - Existing Floor Loop/s|Magic Switch - In Wall|Magic Switch - IP65 Housing|Pedestrian Switch - Custom Notes|Pull Cord - Door Side|Pull Cord - Non Door Side|Pentacode - 2 button Remote|Pentacode - 4 button Remote
+NUMREMOTEQTY1,Remote Qty 1,Number,
+NUMREMOTEQTY2,Remote Qty 2,Number,
+NUMREMOTEQTY3,Remote Qty 3,Number,
+NUMREMOTEQTY4,Remote Qty 4,Number,
+CMBFLOORLOOPINSTALL,Floor Loop Installation,Dropdown,"|3rd Party Lay, Seal=3rd Party Lay, Seal (No Parts Req)|Remax Lay, Seal=Remax Lay, Seal (Cable, Sikaflex Req)"
+CHKHYPERLIFT,Hyperlift Motor,Checkbox,
+CHKHOLDOPEN,Hold Open Switch,Checkbox,
+CHKINTERLOCK,Interlock,Checkbox,
+CHKSTAINLESS,Movisan (Stainless),Checkbox,
+CHKEX35FELT,EX35 Felt,Checkbox,
+CHKMOTORCLEARCOAT,Motor Clear Coat,Checkbox,
+CMBBRAKEIPBASIC,Brake IP Basic,Dropdown,
+CMBCABLELENGTH,Cable Length,Dropdown,
+CMBCURTAINCOLOUR,Curtain Colour,Dropdown,
+CMBMOTORHAND,Motor Hand,Dropdown,
+CMBACT5,Activation 5,Dropdown,

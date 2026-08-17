@@ -1,0 +1,52 @@
+Control Name,Label,Type,Section
+CMBDOORMODEL,Door Model,Dropdown,Door
+NUMDOORHEIGHT,Door Height (mm),Number,Door
+NUMDOORWIDTH,Door Width (mm),Number,Door
+QTY,Quantity,Number,Door
+CMBGPOISO,GPO / Isolator,Dropdown,Overview > Controller
+CMBMOTORHAND,Motor Hand,Dropdown,Overview > Controller
+CMBMOTORORIDE,Hand Crank / Chain Drive,Dropdown,Overview > Controller
+CMBTRACKCONFIG,Tracks Proud / Conc?,Dropdown,Overview > Tracks
+CMBWINDTRACK,High Wind Tracks Required,Dropdown,Overview > Tracks
+CMBELECSPEC,Electrical Spec,Dropdown,Overview > Power
+CMBPOWERSUPPLY,Power Supply,Dropdown,Overview > Power
+CMBCABLELENGTH,Cable Length,Dropdown,Overview > Controller
+CMBCONTROLLERENCLOSURE,Controller Enclosure,Dropdown,Upgrades / Common Options > Enclosure & Motor
+CMBMOTORSHROUD,Motor Shroud,Dropdown,Upgrades / Common Options > Enclosure & Motor
+CMBMOTORSPEC,Brake / VSD Protection,Dropdown,Upgrades / Common Options > Enclosure & Motor
+CMBBRAKEIPBASIC,Brake IP Basic,Dropdown,Upgrades / Common Options > Enclosure & Motor
+CHKMOTORCLEARCOAT,Motor Clear Coat,Checkbox,Upgrades / Common Options > Enclosure & Motor
+CMBBRUSHSEAL,Brush Seal,Dropdown,Upgrades / Common Options > Seals & Safety
+CMBTRAFFICLIGHT,Traffic Light,Dropdown,Upgrades / Common Options > Seals & Safety
+CMBPEBEAMS,PE Beam,Dropdown,Upgrades / Common Options > Seals & Safety
+CHKHYPERLIFT,Hyperlift Motor,Checkbox,Options > Tick Options
+CHKHOLDOPEN,Hold Open Switch,Checkbox,Options > Tick Options
+CHKINTERLOCK,Interlock,Checkbox,Options > Tick Options
+CHKSTAINLESS,Movisan (Stainless),Checkbox,Options > Tick Options
+CHKEX35FELT,EX35 Felt,Checkbox,Options > Tick Options
+CMBUPS,UPS,Dropdown,Options > Finish & Extras
+CMBCUSTSTEEL,Custom Steel Work,Dropdown,Options > Finish & Extras
+CMBREARHOODBRUSHSEAL,Rear Hood Brush Seal,Dropdown,Options > Finish & Extras
+CMBSPECIALCONDUIT,Conduit,Dropdown,Options > Finish & Extras
+CMBCOLOURFINISHTYPE,Powdercoat / Painting,Dropdown,Options > Finish & Extras
+CMBCURTAINCOLOUR,Curtain Colour,Dropdown,Options > Finish & Extras
+CMBES40FASCIA,Fascia,Dropdown,ES40 Only
+CMBES40VSDMTR,VSD Motor,Dropdown,ES40 Only
+CMBHEATTRACELEG,Heat Trace Legs,Dropdown,Thermic + Movichill Only
+CMBHEATTRACEHOOD,Heat Trace In Hood,Dropdown,Thermic + Movichill Only
+CMBGEARBOXHEATER,Gearbox Heater,Dropdown,Thermic + Movichill Only
+CMBFELTSEAL,Felt Seal,Dropdown,Thermic + Movichill Only
+CMBPED1,Pedestrian Button 1,Dropdown,Activations > Buttons & Radars
+CMBPED2,Pedestrian Button 2,Dropdown,Activations > Buttons & Radars
+CMBRADAR1,Door Side Radar,Dropdown,Activations > Buttons & Radars
+CMBRADAR2,Non-Door Side Radar,Dropdown,Activations > Buttons & Radars
+CMBACT1,Activation 1,Dropdown,Activations > Activation Slots
+NUMREMOTEQTY1,Remote Qty 1,Number,Activations > Activation Slots
+CMBACT2,Activation 2,Dropdown,Activations > Activation Slots
+NUMREMOTEQTY2,Remote Qty 2,Number,Activations > Activation Slots
+CMBACT3,Activation 3,Dropdown,Activations > Activation Slots
+NUMREMOTEQTY3,Remote Qty 3,Number,Activations > Activation Slots
+CMBACT4,Activation 4,Dropdown,Activations > Activation Slots
+NUMREMOTEQTY4,Remote Qty 4,Number,Activations > Activation Slots
+CMBACT5,Activation 5,Dropdown,Activations > Activation Slots
+CMBFLOORLOOPINSTALL,Floor Loop Installation,Dropdown,Activations > Activation Slots

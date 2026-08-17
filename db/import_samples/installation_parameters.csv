@@ -1,0 +1,55 @@
+Control Name,Label,Type
+TXTCONFIGID,Config ID,Text
+CMBJOBTYPE,Job Type,Dropdown
+CMBFREIGHTRATE,Freight Rate,Dropdown
+TXTSWINGINSTALLPARTID,Swing Install Part ID,Text
+TXTLUMPSUMDESC,Lump Sum Description,Text
+CHKISPAIR,Is Pair,Checkbox
+CHKALDISPEC,ALDI Spec,Checkbox
+CHKINSGANTRY,Install Gantry,Checkbox
+CHKINSSTRIPSM,Install Strip Door (Small),Checkbox
+CHKINSSTRIPLG,Install Strip Door (Large),Checkbox
+CHKINSSTRIPREP,Strip Door Replacement,Checkbox
+CHKLABSTRIPREMOVAL,Strip Door Removal (Labour),Checkbox
+CHKLABSLDREMOVAL,Sliding Door Removal (Labour),Checkbox
+CHKINSSWIS,Install Swing Door - Single,Checkbox
+CHKINSSWIP,Install Swing Door - Pair,Checkbox
+CHKINSREPPNLS,Replace Panel - Single,Checkbox
+CHKINSREPPNLP,Replace Panel - Pair,Checkbox
+CHKLABSWIREMOVAL,Swing Door Removal (Labour),Checkbox
+CHKSWIDISPOSAL,Swing Door Disposal,Checkbox
+CHKINSFACT,Factory Install,Checkbox
+CHKINS50SWIS,Install 50 Swing - Single,Checkbox
+CHKINS50SWIP,Install 50 Swing - Pair,Checkbox
+CHKINSSLD,Install Sliding Door,Checkbox
+CHKINSCAP,Install Sensor Cap (SDJC),Checkbox
+CHKINSRRD4X4,Rapid Door Installation - Up to 4x4,Checkbox
+CHKINSRRD6X6,Rapid Door Installation - Above 4x4,Checkbox
+CHKINSHSDFOLDING,Concertina/Movifold Door Installation,Checkbox
+CHKLABRRDREMOVAL,Removal of Existing Rapid Door,Checkbox
+CHKLABRRDDISPOSAL,Disposal of Existing Rapid Door,Checkbox
+CHKINSPACK,Install Pack,Checkbox
+CHKINSENT4X4,Enturi Install - Up to 4x4,Checkbox
+CHKINSENT6X6,Enturi Install - Above 4x4,Checkbox
+CHKINSHSDSECTIONAL,Sectional Door Install,Checkbox
+CHKINSSHUTTER5X5,Roller Shutter Install - 5x5,Checkbox
+CHKINSSHUTTER5X5PLUS,Roller Shutter Install - Above 5x5,Checkbox
+CHKINSBOL,Install Bollard,Checkbox
+CHKLIFTINGFRAME,Lifting Frame Required,Checkbox
+CHKASSAREMOVAL,Assa Door Removal Kit,Checkbox
+CHKSPAREISOLATOR,Spare Isolator Required,Checkbox
+CHKROLLERSHUTTERREMOVAL,Roller Shutter Removal Kit,Checkbox
+CHKLABSITEASS,Site Assessment,Checkbox
+CHKLABSITEATT,Site Attendance / Visit,Checkbox
+CHKINSAH,After Hours,Checkbox
+CHKRETURNTRIP,Return Trip (Connect + Commission),Checkbox
+CHKACCOM,Accommodation Required,Checkbox
+NUMSTRIPAREA,Strip Door Area (m2),Number
+NUMRETURNCOST,Return Trip Cost,Number
+NUMDRIVINGTIME,Driving Time (hours),Number
+NUMTOTALDOORSPROJ,Total Doors in Project,Number
+NUMESTPROJECTSONRUN,Estimated Projects on Run,Number
+NUMACCOMNIGHT,Accommodation Nights,Number
+NUMPERSONINSTALL,People on Install,Number
+NUMLUMSUM,Lump Sum Cost,Number
+NUMFREIGHTALLOWANCE,Freight Allowance,Number

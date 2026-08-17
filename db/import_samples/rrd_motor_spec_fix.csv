@@ -1,0 +1,3 @@
+Control Name,Label,Type,Options
+CMBBRAKEIPBASIC,Brake IP Rating,Dropdown,|IP65 Std|IP66 Brake Cover
+CMBMOTORSPEC,Motor Environment Spec,Dropdown,|Standard|External / Moisture|Aggressive / Corrosive
