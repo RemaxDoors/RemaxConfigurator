@@ -1,6 +1,7 @@
 import type { Party, Location } from "@/types/customer";
 import type { Door } from "@/types/door";
 import type { Part } from "@/types/part";
+import type { PriceBreakdown } from "@/types/pricing";
 
 export type QuoteStatus = "Draft" | "Open" | "Won" | "Lost";
 
@@ -30,6 +31,8 @@ export interface QuoteLine {
   /** Sell price per unit (after reseller discount). */
   totalUnitPrice: number;
   marginPercent: number;
+  /** Full M1 price breakdown (door + upgrades + installation), for the expandable view. */
+  breakdown?: PriceBreakdown;
 }
 
 /**

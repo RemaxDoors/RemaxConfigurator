@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { MOCK_LOCATIONS, MOCK_PARTIES } from "@/lib/mock-data";
+import { fetchM1Locations, searchM1Customers } from "@/lib/m1-customers";
 import type { Location, Party } from "@/types/customer";
 
 interface CustomerPickerProps {
@@ -31,16 +31,35 @@ interface CustomerPickerProps {
   ) => void;
 }
 
-const MIN_QUERY = 3;
+const MIN_QUERY = 2;
 const EMPTY_LOCATION: Location = { id: "", name: "" };
 
-function searchParties(query: string): Party[] {
-  const term = query.trim().toLowerCase();
-  if (term.length < MIN_QUERY) return [];
-  return MOCK_PARTIES.filter(
-    (p) =>
-      p.name.toLowerCase().includes(term) || p.id.toLowerCase().includes(term)
-  );
+/** Debounced live M1 organisation search. */
+function useM1PartySearch(query: string, enabled: boolean) {
+  const [results, setResults] = React.useState<Party[]>([]);
+  const [searching, setSearching] = React.useState(false);
+
+  React.useEffect(() => {
+    const q = query.trim();
+    if (!enabled || q.length < MIN_QUERY) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    let active = true;
+    const timer = setTimeout(() => {
+      searchM1Customers(q)
+        .then((r) => active && setResults(r))
+        .finally(() => active && setSearching(false));
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [query, enabled]);
+
+  return { results, searching };
 }
 
 function ResultsList<T>({
@@ -102,12 +121,32 @@ export function CustomerPicker({
     null
   );
 
-  const customerResults = searchParties(customerQuery);
-  const orgResults = searchParties(orgQuery);
+  const { results: customerResults, searching: customerSearching } =
+    useM1PartySearch(customerQuery, open);
+  const { results: orgResults, searching: orgSearching } = useM1PartySearch(
+    orgQuery,
+    open
+  );
+
   const effectiveShipToId = pendingOrg?.id ?? shipToCustomerId;
-  const locationResults = effectiveShipToId
-    ? MOCK_LOCATIONS[effectiveShipToId] ?? []
-    : [];
+  const [locationResults, setLocationResults] = React.useState<Location[]>([]);
+  const [locationsLoading, setLocationsLoading] = React.useState(false);
+
+  // Load ship-to locations from M1 whenever the ship-to organisation changes.
+  React.useEffect(() => {
+    if (!open || !effectiveShipToId) {
+      setLocationResults([]);
+      return;
+    }
+    let active = true;
+    setLocationsLoading(true);
+    fetchM1Locations(effectiveShipToId)
+      .then((r) => active && setLocationResults(r))
+      .finally(() => active && setLocationsLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [open, effectiveShipToId]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -150,8 +189,10 @@ export function CustomerPicker({
               onSelect={setPendingCustomer}
               emptyHint={
                 customerQuery.trim().length < MIN_QUERY
-                  ? "Enter at least 3 characters."
-                  : "No matching customers found."
+                  ? "Enter at least 2 characters to search M1."
+                  : customerSearching
+                    ? "Searching M1…"
+                    : "No matching customers found."
               }
             />
             <div className="flex justify-end">
@@ -192,8 +233,10 @@ export function CustomerPicker({
               }}
               emptyHint={
                 orgQuery.trim().length < MIN_QUERY
-                  ? "Enter at least 3 characters."
-                  : "No matching ship-to customers found."
+                  ? "Enter at least 2 characters to search M1."
+                  : orgSearching
+                    ? "Searching M1…"
+                    : "No matching ship-to customers found."
               }
             />
             <div className="flex justify-end">
@@ -227,7 +270,11 @@ export function CustomerPicker({
                   getLabel={(l) => `${l.id} — ${l.name}`}
                   selectedKey={pendingLocation?.id ?? null}
                   onSelect={setPendingLocation}
-                  emptyHint="No ship-to locations found for this customer."
+                  emptyHint={
+                    locationsLoading
+                      ? "Loading locations from M1…"
+                      : "No ship-to locations found for this customer."
+                  }
                 />
                 <div className="flex justify-end">
                   <Button

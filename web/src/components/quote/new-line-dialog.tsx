@@ -7,6 +7,7 @@ import {
   Check,
   DoorClosed,
   DoorOpen,
+  Loader2,
   Package,
   PackageSearch,
   Search,
@@ -33,7 +34,14 @@ import {
   type DoorTypeDef,
   type DoorTypeId,
 } from "@/lib/door-types";
-import { searchM1Parts, type M1Part } from "@/lib/mock-parts";
+import { searchM1Parts, type M1Part } from "@/lib/m1-parts";
+import { money } from "@/lib/format";
+import { fetchConfigData } from "@/lib/config-data";
+import {
+  fetchConfiguratorLinks,
+  type ConfiguratorLink,
+} from "@/lib/configurator-links";
+import type { Configurator } from "@/types/configurator";
 import type { Door } from "@/types/door";
 import type { Part } from "@/types/part";
 
@@ -51,6 +59,9 @@ export interface NewLineResult {
   item: Part | Door;
   runCurtain: boolean;
   runInstallation: boolean;
+  /** Sub-configurator template ids the user opted into (from uCfgConfiguratorLinks). */
+  curtainConfiguratorId?: string;
+  installationConfiguratorId?: string;
 }
 
 type Step = "entry" | "part" | "door-type" | "door-details" | "door-config";
@@ -87,6 +98,11 @@ function ChoiceBox({
   );
 }
 
+interface ModelOption {
+  value: string;
+  label: string;
+}
+
 export function NewLineDialog({
   open,
   onOpenChange,
@@ -94,10 +110,87 @@ export function NewLineDialog({
 }: NewLineDialogProps) {
   const [step, setStep] = React.useState<Step>("entry");
 
+  // Configurator definitions from the DB (via the API) — used so the model
+  // dropdown shows the same label + options as the configurator setup page.
+  const [configurators, setConfigurators] = React.useState<Configurator[]>([]);
+  React.useEffect(() => {
+    if (!open) return;
+    let active = true;
+    fetchConfigData()
+      .then((data) => {
+        if (active) setConfigurators(data.configurators ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
+  // Sub-configurator relationships from the config DB.
+  const [links, setLinks] = React.useState<ConfiguratorLink[]>([]);
+  React.useEffect(() => {
+    if (!open) return;
+    let active = true;
+    fetchConfiguratorLinks()
+      .then((l) => active && setLinks(l))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
+  // The CMBDOORMODEL parameter for a door type's configurator, if the DB has one.
+  const modelParamFor = React.useCallback(
+    (type: DoorTypeDef | undefined) => {
+      if (!type) return undefined;
+      const cfg = configurators.find((c) => c.id === type.configuratorId);
+      return cfg?.parameters.find(
+        (p) => p.controlName.toUpperCase() === "CMBDOORMODEL"
+      );
+    },
+    [configurators]
+  );
+
+  // DB options (non-empty) when available, otherwise the hardcoded fallback list.
+  const modelOptionsFor = React.useCallback(
+    (type: DoorTypeDef | undefined): ModelOption[] => {
+      const param = modelParamFor(type);
+      const dbOptions = (param?.options ?? []).filter((o) => o.value !== "");
+      if (dbOptions.length) {
+        return dbOptions.map((o) => ({ value: o.value, label: o.label || o.value }));
+      }
+      return (type?.models ?? []).map((m) => ({ value: m, label: m }));
+    },
+    [modelParamFor]
+  );
+
   // Part path
   const [partQuery, setPartQuery] = React.useState("");
   const [selectedPart, setSelectedPart] = React.useState<M1Part | null>(null);
   const [partQty, setPartQty] = React.useState(1);
+  const [partResults, setPartResults] = React.useState<M1Part[]>([]);
+  const [partSearching, setPartSearching] = React.useState(false);
+
+  // Debounced M1 part search.
+  React.useEffect(() => {
+    const q = partQuery.trim();
+    if (q.length < 2) {
+      setPartResults([]);
+      setPartSearching(false);
+      return;
+    }
+    setPartSearching(true);
+    let active = true;
+    const t = setTimeout(() => {
+      searchM1Parts(q)
+        .then((r) => active && setPartResults(r))
+        .finally(() => active && setPartSearching(false));
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+  }, [partQuery]);
 
   // Door path
   const [doorTypeId, setDoorTypeId] = React.useState<DoorTypeId | null>(null);
@@ -113,6 +206,8 @@ export function NewLineDialog({
     setPartQuery("");
     setSelectedPart(null);
     setPartQty(1);
+    setPartResults([]);
+    setPartSearching(false);
     setDoorTypeId(null);
     setModel("");
     setDoorName("");
@@ -129,7 +224,17 @@ export function NewLineDialog({
   const doorType: DoorTypeDef | undefined = DOOR_TYPES.find(
     (t) => t.id === doorTypeId
   );
-  const partResults = searchM1Parts(partQuery);
+
+  // Which sub-configurators this door's configurator links to.
+  const activeConfiguratorId = doorType
+    ? configuratorFor(doorType, model)
+    : "";
+  const myLinks = links.filter((l) => l.parentId === activeConfiguratorId);
+  const curtainLink = myLinks.find((l) => l.linkType === "curtain");
+  const installLink = myLinks.find((l) => l.linkType === "installation");
+  // Fall back to the hardcoded catalogue when the API is unavailable.
+  const hasCurtainLink = curtainLink ? true : links.length === 0 && !!doorType?.needsCurtain;
+  const hasInstallLink = installLink ? true : links.length === 0;
 
   const finishPart = () => {
     if (!selectedPart || partQty < 1) return;
@@ -139,6 +244,8 @@ export function NewLineDialog({
       partDescription: selectedPart.partDescription,
       partLongDescription: selectedPart.partLongDescription,
       partQty,
+      sell: selectedPart.sell,
+      cost: selectedPart.cost,
     };
     onCreate({ item, runCurtain: false, runInstallation: false });
     onOpenChange(false);
@@ -159,10 +266,18 @@ export function NewLineDialog({
         { controlName: "NUMDOORWIDTH", value: String(width) },
       ],
     };
+    const wantsCurtain = hasCurtainLink && runCurtain;
+    const wantsInstall = hasInstallLink && runInstallation;
     onCreate({
       item,
-      runCurtain: doorType.needsCurtain && runCurtain,
-      runInstallation,
+      runCurtain: wantsCurtain,
+      runInstallation: wantsInstall,
+      curtainConfiguratorId: wantsCurtain
+        ? curtainLink?.childId ?? "CURTAIN-TEMPLATE"
+        : undefined,
+      installationConfiguratorId: wantsInstall
+        ? installLink?.childId ?? "INSTALLATION-TEMPLATE"
+        : undefined,
     });
     onOpenChange(false);
   };
@@ -237,7 +352,11 @@ export function NewLineDialog({
 
             {partQuery.trim().length < 2 ? (
               <p className="px-1 py-4 text-sm text-muted-foreground">
-                Enter at least 2 characters to search.
+                Enter at least 2 characters to search M1.
+              </p>
+            ) : partSearching ? (
+              <p className="flex items-center gap-2 px-1 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Searching M1…
               </p>
             ) : partResults.length === 0 ? (
               <p className="px-1 py-4 text-sm text-muted-foreground">
@@ -245,8 +364,8 @@ export function NewLineDialog({
               </p>
             ) : (
               <ul className="max-h-56 divide-y overflow-auto rounded-md border">
-                {partResults.map((part) => {
-                  const key = `${part.partId}-${part.partRevision}`;
+                {partResults.map((part, i) => {
+                  const key = `${part.partId}-${part.partRevision}-${i}`;
                   const selected =
                     selectedPart?.partId === part.partId &&
                     selectedPart?.partRevision === part.partRevision;
@@ -256,20 +375,21 @@ export function NewLineDialog({
                         type="button"
                         onClick={() => setSelectedPart(part)}
                         className={cn(
-                          "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
+                          "flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
                           selected && "bg-accent"
                         )}
                       >
-                        <span>
-                          <span className="font-mono text-xs">
-                            {part.partId}
-                          </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="font-mono text-xs">{part.partId}</span>
                           <span className="text-muted-foreground">
-                            {" "}
-                            rev {part.partRevision} — {part.partDescription}
+                            {part.partRevision ? ` rev ${part.partRevision}` : ""} —{" "}
+                            {part.partDescription}
                           </span>
                         </span>
-                        {selected && <Check className="h-4 w-4 text-primary" />}
+                        <span className="shrink-0 tabular-nums">
+                          {money(part.sell)}
+                        </span>
+                        {selected && <Check className="h-4 w-4 shrink-0 text-primary" />}
                       </button>
                     </li>
                   );
@@ -310,7 +430,7 @@ export function NewLineDialog({
                 description={type.description}
                 onClick={() => {
                   setDoorTypeId(type.id);
-                  setModel(type.models[0] ?? "");
+                  setModel(modelOptionsFor(type)[0]?.value ?? "");
                   setStep("door-details");
                 }}
               />
@@ -323,16 +443,18 @@ export function NewLineDialog({
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="door-model">Model</Label>
+                <Label htmlFor="door-model">
+                  {modelParamFor(doorType)?.label || "Model"}
+                </Label>
                 <select
                   id="door-model"
                   className={SELECT_CLASS}
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
                 >
-                  {doorType.models.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
+                  {modelOptionsFor(doorType).map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
                     </option>
                   ))}
                 </select>
@@ -394,13 +516,15 @@ export function NewLineDialog({
               <Check className="h-4 w-4 text-primary" />
             </div>
 
-            {doorType.needsCurtain && (
+            {/* Sub-configurators come from the config DB (uCfgConfiguratorLinks),
+                so curtain only offers itself where it actually applies. */}
+            {hasCurtainLink && (
               <div className="flex items-center gap-3 rounded-md border p-3">
                 <Blinds className="h-5 w-5 text-muted-foreground" />
                 <div className="flex-1">
                   <p className="text-sm font-medium">Curtain configurator</p>
                   <p className="text-xs text-muted-foreground">
-                    Required for Rapid doors.
+                    Rapid doors only — curtain size and windows.
                   </p>
                 </div>
                 <Switch
@@ -411,20 +535,22 @@ export function NewLineDialog({
               </div>
             )}
 
-            <div className="flex items-center gap-3 rounded-md border p-3">
-              <Wrench className="h-5 w-5 text-muted-foreground" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Installation configurator</p>
-                <p className="text-xs text-muted-foreground">
-                  Add installation if applicable.
-                </p>
+            {hasInstallLink && (
+              <div className="flex items-center gap-3 rounded-md border p-3">
+                <Wrench className="h-5 w-5 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Installation configurator</p>
+                  <p className="text-xs text-muted-foreground">
+                    Install options and labour for this door.
+                  </p>
+                </div>
+                <Switch
+                  checked={runInstallation}
+                  onCheckedChange={setRunInstallation}
+                  aria-label="Run installation configurator"
+                />
               </div>
-              <Switch
-                checked={runInstallation}
-                onCheckedChange={setRunInstallation}
-                aria-label="Run installation configurator"
-              />
-            </div>
+            )}
 
             <div className="flex justify-end pt-1">
               <Button onClick={finishDoor}>

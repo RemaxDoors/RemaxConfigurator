@@ -20,6 +20,10 @@ import {
   NewLineDialog,
   type NewLineResult,
 } from "@/components/quote/new-line-dialog";
+import { ConfiguratorForm } from "@/components/quote/configurator-form";
+import type { ExtensionPanel } from "@/components/quote/extension-screen";
+import type { ValidationResult } from "@/lib/validate";
+import type { PriceBreakdown } from "@/types/pricing";
 import { MOCK_QUOTE_LINES } from "@/lib/mock-data";
 import { isDoor } from "@/types/door";
 import type { Location, Party } from "@/types/customer";
@@ -31,9 +35,7 @@ const EMPTY_LOCATION: Location = { id: "", name: "" };
 function makeQuote(quoteId: string, isNew: boolean): Quote {
   return {
     quoteId,
-    customer: isNew
-      ? EMPTY_PARTY
-      : { id: "10231", name: "Woolworths Distribution Centre" },
+    customer: EMPTY_PARTY,
     shipToCustomer: EMPTY_PARTY,
     shipToLocation: EMPTY_LOCATION,
     projectName: "",
@@ -64,6 +66,16 @@ export default function QuotePage({ params }: { params: { id: string } }) {
   const [pickerOpen, setPickerOpen] = React.useState(false);
   const [newLineOpen, setNewLineOpen] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
+  // Sub-configurators (curtain / installation) chosen per quote line.
+  const [lineExtensions, setLineExtensions] = React.useState<
+    Record<string, ExtensionPanel[]>
+  >({});
+  const [configuring, setConfiguring] = React.useState<{
+    lineId: string;
+    configuratorId: string;
+    initialValues: Record<string, string>;
+    extensions: ExtensionPanel[];
+  } | null>(null);
 
   const patchQuote = (patch: Partial<Quote>) =>
     setQuote((prev) => ({ ...prev, ...patch }));
@@ -91,37 +103,106 @@ export default function QuotePage({ params }: { params: { id: string } }) {
   };
 
   const handleCreateLine = (result: NewLineResult) => {
-    setQuote((prev) => {
-      const nextId = String(
-        Math.max(0, ...prev.lines.map((l) => Number(l.quoteLineId) || 0)) + 1
-      );
-      const newLine: QuoteLine = {
-        quoteId: prev.quoteId,
-        quoteLineId: nextId,
-        item: result.item,
-        doorTotal: 0,
-        installationTotal: 0,
-        resellerDiscountPercent: 0,
-        totalUnitPrice: 0,
-        marginPercent: 0,
-      };
-      return { ...prev, lines: [...prev.lines, newLine] };
-    });
+    const nextId = String(
+      Math.max(0, ...quote.lines.map((l) => Number(l.quoteLineId) || 0)) + 1
+    );
+    // Plain parts carry their M1 price; doors are priced later via the configurator.
+    const partSell = !isDoor(result.item) ? result.item.sell ?? 0 : 0;
+    const partCost = !isDoor(result.item) ? result.item.cost ?? 0 : 0;
+    const newLine: QuoteLine = {
+      quoteId: quote.quoteId,
+      quoteLineId: nextId,
+      item: result.item,
+      doorTotal: 0,
+      installationTotal: 0,
+      resellerDiscountPercent: 0,
+      totalUnitPrice: partSell,
+      marginPercent: partSell ? (partSell - partCost) / partSell : 0,
+    };
+    setQuote((prev) => ({ ...prev, lines: [...prev.lines, newLine] }));
 
     if (isDoor(result.item)) {
-      const configs = [
-        "Door",
-        result.runCurtain && "Curtain",
-        result.runInstallation && "Installation",
-      ]
-        .filter(Boolean)
-        .join(" + ");
-      setNotice(
-        `Door line added — next you'll configure: ${configs}. (Configurator screen is coming next.)`
+      // Go straight into the configurator for the new door line.
+      const initialValues = Object.fromEntries(
+        result.item.parameters.map((p) => [p.controlName, p.value])
       );
+      const extensions: ExtensionPanel[] = [];
+      if (result.runCurtain && result.curtainConfiguratorId) {
+        extensions.push({
+          kind: "curtain",
+          configuratorId: result.curtainConfiguratorId,
+          title: "Curtain configurator",
+        });
+      }
+      if (result.runInstallation && result.installationConfiguratorId) {
+        extensions.push({
+          kind: "installation",
+          configuratorId: result.installationConfiguratorId,
+          title: "Installation configurator",
+        });
+      }
+      setLineExtensions((prev) => ({ ...prev, [nextId]: extensions }));
+      setConfiguring({
+        lineId: nextId,
+        configuratorId: result.item.configuratorId,
+        initialValues,
+        extensions,
+      });
+      setNotice(null);
     } else {
       setNotice("Part added to the quote.");
     }
+  };
+
+  const handleEdit = (lineId: string) => {
+    const line = quote.lines.find((l) => l.quoteLineId === lineId);
+    if (!line) return;
+    if (!isDoor(line.item)) {
+      setNotice("Only door lines can be configured.");
+      return;
+    }
+    const initialValues = Object.fromEntries(
+      line.item.parameters.map((p) => [p.controlName, p.value])
+    );
+    setConfiguring({
+      lineId,
+      configuratorId: line.item.configuratorId,
+      initialValues,
+      extensions: lineExtensions[lineId] ?? [],
+    });
+  };
+
+  const handleConfigComplete = (
+    values: Record<string, string>,
+    result: ValidationResult,
+    pricing: PriceBreakdown | null
+  ) => {
+    if (!configuring) return;
+    setLines((lines) =>
+      lines.map((l) => {
+        if (l.quoteLineId !== configuring.lineId || !isDoor(l.item)) return l;
+        const parameters = Object.entries(values).map(([controlName, value]) => ({
+          controlName,
+          value,
+        }));
+        const qty = pricing?.qty ?? l.item.partQty ?? 1;
+        return {
+          ...l,
+          item: { ...l.item, parameters, partQty: qty },
+          doorTotal: pricing?.doorPrice ?? l.doorTotal,
+          installationTotal: pricing?.installation ?? l.installationTotal,
+          totalUnitPrice: pricing?.unitSell ?? l.totalUnitPrice,
+          // line.marginPercent is a fraction (percent() multiplies by 100)
+          marginPercent: pricing ? pricing.marginPercent / 100 : l.marginPercent,
+          breakdown: pricing ?? l.breakdown,
+        };
+      })
+    );
+    const warns = result.warnings.length;
+    setNotice(
+      `Configuration saved${warns ? ` (${warns} warning${warns > 1 ? "s" : ""})` : ""}.`
+    );
+    setConfiguring(null);
   };
 
   return (
@@ -183,16 +264,26 @@ export default function QuotePage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      <QuoteLines
-        lines={quote.lines}
-        selectedLineId={selectedLineId}
-        onSelect={setSelectedLineId}
-        onNewLine={() => setNewLineOpen(true)}
-        onSearchParts={() => setNewLineOpen(true)}
-        onEdit={() => {}}
-        onCopy={handleCopy}
-        onDelete={handleDelete}
-      />
+      {configuring ? (
+        <ConfiguratorForm
+          configuratorId={configuring.configuratorId}
+          initialValues={configuring.initialValues}
+          extensions={configuring.extensions}
+          onCancel={() => setConfiguring(null)}
+          onComplete={handleConfigComplete}
+        />
+      ) : (
+        <QuoteLines
+          lines={quote.lines}
+          selectedLineId={selectedLineId}
+          onSelect={setSelectedLineId}
+          onNewLine={() => setNewLineOpen(true)}
+          onSearchParts={() => setNewLineOpen(true)}
+          onEdit={handleEdit}
+          onCopy={handleCopy}
+          onDelete={handleDelete}
+        />
+      )}
 
       <NewLineDialog
         open={newLineOpen}

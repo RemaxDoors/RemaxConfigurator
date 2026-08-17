@@ -9,4 +9,7 @@ export interface Part {
   partDescription: string;
   partLongDescription: string;
   partQty: number;
+  /** M1 unit sell / cost snapshot for a plain part line (doors price via the configurator). */
+  sell?: number;
+  cost?: number;
 }
