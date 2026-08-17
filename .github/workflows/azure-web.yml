@@ -1,0 +1,80 @@
+# Deploys the Next.js front end (web/) to an Azure Web App running Node.
+#
+# One-time Azure setup:
+#   1. Create a Linux Web App, runtime "Node 20 LTS".
+#   2. Configuration > General settings > Startup Command:  node server.js
+#   3. Configuration > Application settings:
+#        API_URL   = https://<your-api-app>.azurewebsites.net
+#        HOSTNAME  = 0.0.0.0
+#      HOSTNAME matters: the standalone server binds to $HOSTNAME, and App
+#      Service sets that to the machine name, which listens on nothing useful.
+#   4. Set the AZURE_WEBAPP_PUBLISH_PROFILE secret (Get publish profile).
+name: Deploy web to Azure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/azure-web.yml"
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: remax-configurator-web
+  NODE_VERSION: "20.x"
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        working-directory: web
+        run: npm ci
+
+      - name: Lint and type-check
+        working-directory: web
+        run: |
+          npx tsc --noEmit
+          npm run lint
+
+      - name: Build
+        working-directory: web
+        # API_URL is read at request time by the BFF routes, not baked in at
+        # build time, so it does not need to be present here.
+        run: npm run build
+
+      - name: Assemble the standalone bundle
+        # `output: standalone` emits server.js plus the traced node_modules,
+        # but static assets and public/ are deliberately left out of it.
+        working-directory: web
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          if [ -d public ]; then cp -r public .next/standalone/public; fi
+          # Next copies .env into the standalone output. CI never checks one
+          # out, but strip it anyway so the same commands are safe to run by
+          # hand on a machine that does have real credentials in web/.env.
+          rm -f .next/standalone/.env .next/standalone/.env.*
+
+      - name: Fail if a secret made it into the bundle
+        working-directory: web
+        run: |
+          if find .next/standalone -maxdepth 1 -name '.env*' | grep -q .; then
+            echo "An .env file is in the deploy bundle — refusing to publish."
+            exit 1
+          fi
+          echo "no .env in the bundle"
+
+      - name: Deploy
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: web/.next/standalone

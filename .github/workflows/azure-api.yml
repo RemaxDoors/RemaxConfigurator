@@ -1,0 +1,81 @@
+# Deploys the FastAPI service (api/) to an Azure Web App for Containers.
+#
+# It ships as a container rather than a code deployment because pyodbc needs
+# the Microsoft ODBC driver installed at OS level, and api/Dockerfile bakes
+# msodbcsql18 in. A plain Python App Service has no reliable way to do that.
+#
+# One-time Azure setup:
+#   1. Create an Azure Container Registry (Basic is enough).
+#   2. Create a Linux Web App, "Publish: Container", pointing at that registry.
+#   3. Configuration > Application settings:
+#        DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD   (M1 SQL Server)
+#        CONFIG_DB_NAME = new
+#        DB_DRIVER      = ODBC Driver 18 for SQL Server   (the one in the image)
+#        ALLOWED_ORIGINS= https://<your-web-app>.azurewebsites.net
+#        WEBSITES_PORT  = 8000
+#      Store DB_PASSWORD as a Key Vault reference, not a literal.
+#   4. Secrets in GitHub: AZURE_CREDENTIALS, ACR_LOGIN_SERVER,
+#      ACR_USERNAME, ACR_PASSWORD.
+#
+# The M1 database must allow inbound connections from the Web App's outbound
+# IPs, or be reached over a VNet integration / private endpoint.
+name: Deploy API to Azure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - ".github/workflows/azure-api.yml"
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: remax-configurator-api
+  IMAGE_NAME: remax-configurator-api
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the app imports before shipping it
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r api/requirements.txt
+          cd api && python -c "import app.main" && python app/formula.py
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          push: true
+          tags: |
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          images: ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Smoke-test /status
+        run: |
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/status" || true)
+            if [ "$code" = "200" ]; then echo "API is up"; exit 0; fi
+            echo "attempt $i: HTTP $code"; sleep 15
+          done
+          echo "API did not return 200 within 5 minutes"; exit 1

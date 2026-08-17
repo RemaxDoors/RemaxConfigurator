@@ -1,201 +1,276 @@
-# 🚪 Remax Configurator — Rapid Door Estimator
+# Remax Configurator
 
-A **Streamlit-based** door configurator and estimator built for the REMAX sales team.  
-It replaces manual M1 configurator screens with a fast, rules-driven web interface that produces accurate, consistent pricing from live M1 SQL data.
-
-> **Project status (proof of concept).** The app **reads live from M1** (pricing, parts, historical quotes/orders, customers) and produces multi-line estimates with price, cost and margin. It is currently **read-only against M1** — configuration is exported to Excel for M1 import. **Write-back to M1** (custom `uQuotes` / `uQuoteLines` / `uConfiguratorValues`) and **HubSpot integration** are planned and out of the current build. Configurator rules are coded in the application, not read from M1. See `Documents/RemaxConfigurator_Proof_Of_Concept.docx` for full scope, roadmap and costing.
-
----
-
-## 🚀 Key Features
-
-### 🔹 1. Multi-Line Estimate Builder
-- Create and manage a full estimate with multiple door lines
-- Each line stores its own configuration, pricing, and notes
-- Edit, duplicate, or delete lines at any time
-- Live **Estimate Total** across all lines
-- Reseller discount applied per line
-
----
-
-### 🔹 2. Door Configurator (RRD — Movidor)
-Mirrors the M1 `PART-RRD-MOVIDOR-TEMPLATE` configurator with a modern tabbed layout:
-
-| Tab | Controls |
-|---|---|
-| **Overview** | GPO/Isolator, Hand Crank, Track Config, Wind Track, Electrical Spec, Power Supply |
-| **Upgrades** | Controller Enclosure, Motor Shroud, Brake/VSD, Brush Seal, Traffic Light, PE Beam, UPS, Custom Steel, Conduit, Powdercoat, Interlock, Hyperlift, Stainless, and more |
-| **Activations** | Pedestrian Buttons, Radars, Activations 1–4 (with remote qty), Floor Loop |
-| **Freight** | State-based freight rate calculator |
-
-- **Inline metrics bar** shows Base Door Price, Model, and Dimensions instantly after selection
-- **Model-specific sections** (ES40, Thermic/Movichill) only appear when relevant
-- Live validation with field-level error and warning messages
-
----
-
-### 🔹 3. Curtain Configurator
-Mirrors `PART-CURT-RRD` logic with full Python port of M1 VBScript rules:
-
-- Curtain colour, floor slope, finished height (left/right) and width — auto-calculated from door dimensions + correction factors
-- **ES40 / BUGSTOP / CONCERTINA**: panel count calculated automatically (`ceil((height − 230) / 830)` for ES40; panel height formula for CONCERTINA)
-- Window rows (up to 14), window types per model (Clear PVC, Mesh, Coloured Panel, Vision Clear/Mesh for panel doors)
-- Add-ons: slope edge, drip edge, Como wear strip, custom bottom edge, emergency zip, screen printing, EX BV seal
-- Curtain dimensions recalculate automatically when slope, track config, or wind track changes
-
----
-
-### 🔹 4. Installation Configurator
-Mirrors `PART-INSTALLATION-TEMPLATE` with a full quantity rule engine:
-
-- Job Type, People, Total Doors in Project, Projects on Run, Driving Time, Accommodation
-- **Auto-selects** correct installation checkbox on job type change:
-  - `CHKINSRRD4X4` if width ≤ 4000 and height ≤ 4000
-  - `CHKINSRRD6X6` otherwise
-- Generic `calc_qty_per_assembly()` engine handles all unit types:
-  - Per Door, Per Project, Per Leaf, Per Hour, Per Night
-  - SWI-pair doubling and After-Hours (`CHKINSAH`) factor applied per part rule
-- Part quantity rules table (`_PART_QTY_RULES`) — add new parts in one line
-
----
-
-### 🔹 5. Live Pricing Engine
-All prices fetched from live M1 SQL tables — no hardcoded price lists:
-
-| Component | Source table |
-|---|---|
-| Base door sell price / cost | `uSellPriceMatrixs` |
-| Curtain price (standard) | `uCurtainPrices` |
-| ES40 / CONCERTINA panels | `uCurtainPrices` (per component) |
-| Upgrade sell price / cost | `PartUnitSalePrices` |
-| Installation part price / cost | `PartUnitSalePrices` |
-| Curtain correction factors | `uRapidFormulas` |
-
-**Price breakdown** per estimate line:
-
-| Field | Description |
-|---|---|
-| Base Door Sell / Cost | From size matrix |
-| Material Upgrades | Assembly + material options |
-| Material Discount | Applicable discount lines |
-| Installation / Site | Per-part × calculated quantity |
-| Misc Extra | Free-form price + cost per door |
-| Reseller Discount | % off door + upgrades subtotal |
-| **Unit Sell / Cost / Margin** | Final rolled-up figures |
-| **Total Sell** | Unit × Qty |
-
-A **sticky sidebar** shows Unit Sell, Unit Cost, Margin, Qty, and Total Sell while scrolling through configuration.
-
----
-
-### 🔹 6. Search & Reload Historical Configurations
-Search across both **Quotes** and **Sales Orders** from M1:
-
-- Search by customer name, quote/order ID, part ID, or description
-- Results grid shows source, date, model, dimensions, sell price, cost, margin
-- Double-click any row to **reload all M1 configurator values** into a new estimate line
-- Works via `uTraining_SalesPricingView` — a unified view across `QuoteLines` and `SalesOrderLines`
-
----
-
-### 🔹 7. Export to M1 Format
-Generates an **Excel file** compatible with M1 parameter import structure:
-
-- Sheet name: `M1ParameterList`
-- Filters and exports only set controls (`CMB*`, `CHK*`, `NUM*`)
-- Cell `G1` contains the parameter count for M1 import validation
-
----
-
-## 🏗️ Architecture
+Sales quoting and door configuration for Remax rapid doors. Replaces the Streamlit
+proof of concept with a three-tier app that reads prices from **M1 (ECI ERP)** and
+keeps its configurator definition in a database rather than in Python code.
 
 ```
-src/
-├── app.py                          # Entry point — routes estimate vs configurator mode
-├── config.py                       # DB + API config from .env
-├── m1_client.py                    # M1 REST API auth headers (API_ID / API_KEY)
-├── repositories/
-│   ├── sql_service.py              # SQLAlchemy engine (mssql+pyodbc)
-│   ├── pricing_lookup.py           # All price lookups + curtain dimension calculations
-│   ├── quote_repository.py         # Search quotes & sales orders; load historical controls
-│   └── customer_repository.py      # Customer + ship-to location lookups
-├── services/
-│   ├── quote_state.py              # Estimate line state management (add/edit/copy/delete)
-│   ├── export_service.py           # Excel export (M1ParameterList sheet)
-│   ├── data_mapping.py             # mapped_select, get_value, money, percent helpers
-│   ├── configuration_loader.py     # Reload saved M1 config into session
-│   ├── m1_user_inputs.py           # Build M1 User Inputs frame (xaiControlName / xaiValue)
-│   ├── hubspot_prefill.py          # Prefill customer/ship-to from HubSpot payload (stub)
-│   ├── movidor_door_config/        # Door options, defaults, upgrade rules, validation
-│   ├── curtain_config/             # Curtain options, defaults, panel calc, upgrade rules
-│   └── installation_config/        # Installation options, defaults, quantity rule engine
-└── ui/
-    ├── configurator_section.py     # Main configurator page (stepper, save, pricing summary)
-    ├── door_section.py             # Door config tabs
-    ├── curtain_section.py          # Curtain config + panel auto-calc
-    ├── installation_section.py     # Installation config
-    ├── estimate_header.py          # Quote/customer header
-    ├── estimate_lines.py           # Estimate line grid + totals
-    ├── header_section.py           # Customer/ship-to search header
-    ├── customer_picker.py          # Customer search
-    └── configured_part_search.py   # Search & reload historical configs
+┌──────────────┐   HTTPS   ┌──────────────┐   ODBC   ┌────────────────────┐
+│  web/        │ ────────► │  api/        │ ───────► │  SQL Server        │
+│  Next.js 14  │           │  FastAPI     │          │  • M1_RP  (read)   │
+│  App Router  │ ◄──────── │  SQLAlchemy  │ ◄─────── │  • new    (config) │
+└──────────────┘           └──────────────┘          └────────────────────┘
+   browser                    all M1 access             uCfg* tables
 ```
+
+**The web tier never opens a database connection.** Everything under
+`web/src/app/api/*` is a thin proxy to the Python API, so M1 and Simpro
+credentials stay server-side and never reach the browser.
+
+| Database | Owner | Purpose |
+|---|---|---|
+| `M1_RP` | ECI M1 | Read-only source of truth: part prices, door price matrices, customers |
+| `new` | this app | `uCfg*` tables — parameters, options, defaults, rules, validations |
 
 ---
 
-## ⚙️ Setup
+## Running locally
 
 ### Prerequisites
-- Python 3.11+
-- M1 SQL Server database access
-- ODBC Driver 17 or 18 for SQL Server (local dev defaults to 17; the Azure host installs `msodbcsql18` via `startup.sh`)
 
-### Environment variables (`.env`)
-```env
-DB_SERVER=your_server
-DB_NAME=your_database
-DB_USER=your_user
-DB_PASSWORD=your_password
-DB_DRIVER=ODBC Driver 17 for SQL Server
+- **Node.js 20+** and npm
+- **Python 3.12+**
+- **ODBC Driver 17 for SQL Server** ([download](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server))
+- Network access to the M1 SQL Server
 
-APP_NAME=Rapid Door Estimator
-ENVIRONMENT=development
+### 1. Configure
 
-API_ID=your_api_id
-API_KEY=your_api_key
-API_URL=your_api_url
-```
+Both tiers read from gitignored `.env` files. Copy the examples and fill them in:
 
-### Run
 ```bash
-pip install -r requirements.txt
-streamlit run src/app.py
+cp api/.env.example api/.env
+cp web/.env.example web/.env
 ```
 
----
+`api/.env`:
 
-## ☁️ Deployment
-
-Deployed to **Azure App Service** via GitHub Actions.
-
-- **Workflow:** `.github/workflows/main_rapid-door-estimator.yml` — builds and deploys on push to `main`.
-- **Startup:** `startup.sh` installs the Microsoft ODBC driver (`msodbcsql18`) and launches Streamlit on port `8000`:
-  ```bash
-  python -m streamlit run src/app.py --server.port 8000 --server.address 0.0.0.0
-  ```
-- **Secrets/config:** database and API values are supplied via environment variables / App Service settings (never commit `.env`).
-
----
-
-## 🚪 Supported Door Types
-
-| Code | Description | Status |
+| Setting | Example | Notes |
 |---|---|---|
-| `RRD` | Rapid Rolling Door (Movidor range) | ✅ Full configurator |
-| `SWI` | Swing Door | 🔲 Configurator pending |
-| `ENTURI` | Enturi Door | 🔲 Configurator pending |
-| `STRIPDOOR` | Strip Door | 🔲 Configurator pending |
+| `DB_SERVER` | `GIZEME` | M1 SQL Server host |
+| `DB_NAME` | `M1_RP` | The M1 database |
+| `CONFIG_DB_NAME` | `new` | The app's own config database |
+| `DB_USER` / `DB_PASSWORD` | | SQL auth |
+| `DB_DRIVER` | `ODBC Driver 17 for SQL Server` | **18** inside the Docker image |
+| `ALLOWED_ORIGINS` | `http://localhost:3000` | CORS |
 
-### RRD Models
+`web/.env`:
 
-`ES40` · `HS25` · `HS35` · `HS35-THERMIC` · `HS50` · `HS50-THERMIC` · `HS65` · `EX35` · `EX45` · `MOVICHILL` · `MOVICHILL-XL` · `MOVIFOLD` · `CONCERTINA` · `BUGSTOP` · `MS40-THERMIC`
+| Setting | Example | Notes |
+|---|---|---|
+| `API_URL` | `http://localhost:8000` | Where the BFF routes forward to |
+| `SIMPRO_BASE_URL` | `https://<company>.simprosuite.com/api/v1.0` | |
+| `SIMPRO_API_TOKEN` | | Server-side only. Never commit it. |
+
+### 2. Create the config database
+
+Run once against the `new` database, in this order:
+
+```bash
+sqlcmd -S <server> -d new -i db/uCfg_configurator_schema.sql
+sqlcmd -S <server> -d new -i db/uCfg_pricing_rules_schema.sql
+sqlcmd -S <server> -d new -i db/uCfg_add_section.sql
+sqlcmd -S <server> -d new -i db/uCfg_add_audit_columns.sql
+sqlcmd -S <server> -d new -i db/uCfg_change_log.sql
+sqlcmd -S <server> -d new -i db/uCfg_configurator_links.sql
+sqlcmd -S <server> -d new -i db/uCfg_field_map.sql
+sqlcmd -S <server> -d new -i db/uCfg_rules_add_quantity_fields.sql
+sqlcmd -S <server> -d new -i db/uCfg_rules_add_condition_formula.sql
+```
+
+Then seed the configurator definitions:
+
+```bash
+python db/migrate_all.py
+sqlcmd -S <server> -d new -i db/seed_movidor_generated.sql
+```
+
+All migrations are re-runnable.
+
+### 3. Start
+
+On Windows, the `.cmd` scripts start both servers in their own windows:
+
+```bash
+.\run-all.cmd
+```
+
+`run-api.cmd` and `run-web.cmd` start them individually. They expect a Python
+venv at `config\Scripts\python.exe` — edit the script if yours lives elsewhere.
+
+Cross-platform equivalents:
+
+```bash
+cd api && python -m uvicorn app.main:app --reload --port 8000
+```
+
+```bash
+cd web && npm install && npm run dev
+```
+
+| | URL |
+|---|---|
+| Web | <http://localhost:3000> |
+| API | <http://localhost:8000> |
+| API docs (Swagger) | <http://localhost:8000/docs> |
+| Health + config warnings | <http://localhost:3000/status> |
+
+If something looks wrong, **`/status` is the first place to look** — it reports
+whether each database is reachable, counts per configurator, and warns about
+empty dropdowns or configurators with no rules.
+
+---
+
+## Deploying to Azure
+
+Two Azure Web Apps, deployed by two GitHub Actions workflows on push to `main`.
+
+| Component | Azure resource | Workflow |
+|---|---|---|
+| `web/` | Web App, **Node 20 LTS** | `.github/workflows/azure-web.yml` |
+| `api/` | Web App **for Containers** | `.github/workflows/azure-api.yml` |
+
+The API ships as a **container**, not a code deployment, because `pyodbc` needs the
+Microsoft ODBC driver installed at OS level. `api/Dockerfile` bakes in `msodbcsql18`;
+a plain Python App Service has no reliable way to install it.
+
+### Web App: startup command and settings
+
+Next.js is built with `output: "standalone"`, which emits a `server.js`.
+
+**Configuration → General settings → Startup Command:**
+
+```bash
+node server.js
+```
+
+**Configuration → Application settings:**
+
+| Setting | Value |
+|---|---|
+| `API_URL` | `https://<your-api-app>.azurewebsites.net` |
+| `HOSTNAME` | `0.0.0.0` |
+| `SIMPRO_BASE_URL` | your Simpro API base |
+| `SIMPRO_API_TOKEN` | Key Vault reference |
+
+`HOSTNAME` is not optional. The standalone server binds to `$HOSTNAME`, and App
+Service sets that to the machine name — the app starts, listens on nothing
+reachable, and every request times out.
+
+### API app: settings
+
+No startup command needed — the Dockerfile's `CMD` already binds `$PORT`.
+
+| Setting | Value |
+|---|---|
+| `DB_SERVER`, `DB_NAME`, `DB_USER` | M1 connection |
+| `DB_PASSWORD` | **Key Vault reference**, not a literal |
+| `CONFIG_DB_NAME` | `new` |
+| `DB_DRIVER` | `ODBC Driver 18 for SQL Server` — the version in the image |
+| `ALLOWED_ORIGINS` | `https://<your-web-app>.azurewebsites.net` |
+| `WEBSITES_PORT` | `8000` |
+
+The M1 server must accept connections from the Web App's outbound IPs, or be
+reached over VNet integration / a private endpoint. This is the step that most
+often blocks a first deploy — the app starts fine and every query then fails.
+
+### GitHub secrets
+
+| Secret | Used by |
+|---|---|
+| `AZURE_WEBAPP_PUBLISH_PROFILE` | web |
+| `AZURE_CREDENTIALS` | api |
+| `ACR_LOGIN_SERVER`, `ACR_USERNAME`, `ACR_PASSWORD` | api |
+
+The API workflow polls `/status` after deploying and fails the run if it does not
+return 200 within five minutes, so a broken deploy is visible in Actions rather
+than discovered by a salesperson.
+
+> `.github/workflows/main_rapid-door-estimator.yml` still deploys the **legacy
+> Streamlit app** from the repo root. It is untouched and will keep running on
+> pushes to `main`. Delete it once the Streamlit app is retired.
+
+---
+
+## How the configurator works
+
+A configurator is a set of **parameters** (the form fields) and **rules** (what
+each selection adds to the quote). Both live in the database and are edited from
+`/configurator-setup` — no code change to add a rule.
+
+### Sections
+
+A parameter's `Section` drives the form layout. `"Step > Group"` puts a heading
+inside a wizard step:
+
+```
+Overview > Controller     ->  step "Overview", group "Controller"
+Activations               ->  step "Activations", no group
+```
+
+Drag fields between sections on the **Form sections** board; it writes `Section`
+and `SortOrder` only.
+
+### Rules
+
+A rule fires when its **condition groups** pass (AND within a group, OR across
+groups) **and** its optional `ConditionFormula` evaluates non-zero.
+
+The formula engine parses to an AST and evaluates only whitelisted nodes — it is
+not `eval()`, so a configurator formula cannot run arbitrary code.
+
+M1's configurator repeats one shape across dozens of rules: walk a numbered set
+of controls, count what matches, act on the count. That is expressed with
+`group()`:
+
+```
+countStartsWith(group("CMBACT"), "Induction Loop - ") > 0
+countContains(group("CMBACT"), "Loop", "Existing") = 0
+countEquals(group("CMBRADAR"), "IXIO Sensor - Long Stalk")
+sumWhere(group("CMBACT"), "Elsema Remote - 2", group("NUMREMOTEQTY"))
+```
+
+`sumWhere` pairs two numbered groups by slot number — "add up the quantity beside
+each matching activation".
+
+Run the engine's own checks with:
+
+```bash
+python api/app/formula.py
+```
+
+### ⚠️ CSV imports replace the whole set
+
+Importing parameters, rules or defaults **deletes anything the file omits**. A
+short "patch" file will wipe everything else. The UI now lists exactly what will
+be deleted and makes you type the count when it is 10 or more — but to change a
+few rows, write SQL `UPDATE`s instead.
+
+`db/backups/` holds point-in-time snapshots. Take one before bulk edits:
+each file restores parameters, options, rules and conditions exactly.
+
+---
+
+## Repository layout
+
+```
+├── api/                  FastAPI service — all M1 access
+│   ├── app/
+│   │   ├── formula.py            safe AST formula engine
+│   │   ├── config_repo.py        reads uCfg* tables
+│   │   ├── config_write.py       writes uCfg* tables + change log
+│   │   ├── validation_engine.py  condition evaluation
+│   │   ├── m1_pricing.py         door + part prices from M1
+│   │   └── routers/
+│   └── Dockerfile                includes msodbcsql18
+├── web/                  Next.js front end
+│   └── src/
+│       ├── app/api/              BFF proxy routes (no DB access)
+│       ├── components/admin/     configurator setup UI
+│       └── components/quote/     quoting + configurator wizard
+├── db/                   schema, migrations, seeds, backups
+├── src/                  legacy Streamlit app (still in production)
+└── .github/workflows/    Azure deployments
+```
+
+`api/m1_pricing.py` still imports rule modules from `src/`, so the Streamlit app
+cannot be deleted yet. Removing that import is what unblocks its retirement.
