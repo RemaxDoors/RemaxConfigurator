@@ -24,7 +24,6 @@ import { ConfiguratorForm } from "@/components/quote/configurator-form";
 import type { ExtensionPanel } from "@/components/quote/extension-screen";
 import type { ValidationResult } from "@/lib/validate";
 import type { PriceBreakdown } from "@/types/pricing";
-import { MOCK_QUOTE_LINES } from "@/lib/mock-data";
 import { isDoor } from "@/types/door";
 import type { Location, Party } from "@/types/customer";
 import type { Quote, QuoteLine } from "@/types/quote";
@@ -49,7 +48,7 @@ function makeQuote(quoteId: string, isNew: boolean): Quote {
       totalCost: 0,
       marginPercent: 0,
     },
-    lines: isNew ? [] : MOCK_QUOTE_LINES,
+    lines: [],
   };
 }
 

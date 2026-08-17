@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from .. import config_repo, config_write, defaults_engine, settings
-from ..data.configurators import CONFIGURATORS, RULES
 
 router = APIRouter(tags=["configurators"])
 
@@ -92,13 +91,23 @@ class ConfiguratorIn(BaseModel):
 
 @router.get("/configurators")
 def list_configurators():
-    # Prefer the config DB (uCfg* tables); fall back to the static module.
-    if settings.config_db_configured():
-        try:
-            return {"configurators": config_repo.load_configurators(), "source": "db"}
-        except Exception:
-            pass
-    return {"configurators": CONFIGURATORS, "source": "static"}
+    """Configurator definitions from the config DB.
+
+    There is deliberately no fallback. Serving a stale or bundled definition
+    when the database is unreachable lets a salesperson quote against the wrong
+    parameters without anything looking broken — fail loudly instead.
+    """
+    if not settings.config_db_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Config DB is not configured (set DB_* + CONFIG_DB_NAME).",
+        )
+    try:
+        return {"configurators": config_repo.load_configurators(), "source": "db"}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail=f"Config DB unreachable: {exc}"
+        )
 
 
 class ResolveDefaultsIn(BaseModel):
@@ -133,18 +142,24 @@ def list_links():
 
 @router.get("/rules")
 def list_rules(configuratorId: str | None = Query(default=None)):
-    # Prefer saved rules from the config DB; fall back to the static module.
-    if settings.config_db_configured():
-        try:
-            saved = config_repo.load_rules(configuratorId)
-            if saved:
-                return {"rules": saved, "source": "db"}
-        except Exception:
-            pass
-    rules = RULES
-    if configuratorId:
-        rules = [r for r in rules if r["configuratorId"] == configuratorId]
-    return {"rules": rules, "source": "static"}
+    """Pricing rules from the config DB.
+
+    No fallback, for the same reason as /configurators: quoting against a
+    bundled copy of the rules is worse than not quoting at all. An empty list
+    is a valid answer — a configurator with no rules yet — and is distinct
+    from the database being unreachable, which raises.
+    """
+    if not settings.config_db_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Config DB is not configured (set DB_* + CONFIG_DB_NAME).",
+        )
+    try:
+        return {"rules": config_repo.load_rules(configuratorId), "source": "db"}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail=f"Config DB unreachable: {exc}"
+        )
 
 
 @router.post("/configurators/{configurator_id}/rules/replace")

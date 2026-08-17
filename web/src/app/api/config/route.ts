@@ -1,35 +1,42 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { MOCK_CONFIGURATORS } from "@/lib/mock-configurators";
-import { MOCK_RULES } from "@/lib/mock-rules";
-
 /**
- * Server-side proxy to the Python API (set API_URL). Returns the configurators +
- * rules from Python, or falls back to the bundled mock so the frontend still runs
- * standalone.
+ * Server-side proxy to the Python API (set API_URL) for configurators + rules.
+ *
+ * No fallback. A bundled or empty stand-in here would swallow the API's own
+ * 503 and present an empty configurator as though it were real, which is how
+ * someone ends up quoting against parameters that do not exist.
  */
 export async function GET() {
   const base = process.env.API_URL;
-  if (base) {
-    try {
-      const [cRes, rRes] = await Promise.all([
-        fetch(`${base}/configurators`, { cache: "no-store" }),
-        fetch(`${base}/rules`, { cache: "no-store" }),
-      ]);
-      if (cRes.ok && rRes.ok) {
-        const configurators = (await cRes.json()).configurators;
-        const rules = (await rRes.json()).rules;
-        return NextResponse.json({ configurators, rules, source: "api" });
-      }
-    } catch {
-      // fall through to mock
-    }
+  if (!base) {
+    return NextResponse.json({ error: "API_URL not set" }, { status: 503 });
   }
-  return NextResponse.json({
-    configurators: MOCK_CONFIGURATORS,
-    rules: MOCK_RULES,
-    source: "mock",
-  });
+  try {
+    const [cRes, rRes] = await Promise.all([
+      fetch(`${base}/configurators`, { cache: "no-store" }),
+      fetch(`${base}/rules`, { cache: "no-store" }),
+    ]);
+    if (!cRes.ok || !rRes.ok) {
+      const failed = !cRes.ok ? cRes : rRes;
+      const detail = await failed
+        .json()
+        .then((d) => d.detail || d.error)
+        .catch(() => null);
+      return NextResponse.json(
+        { error: detail || `Config API returned ${failed.status}.` },
+        { status: failed.status === 503 ? 503 : 502 }
+      );
+    }
+    const configurators = (await cRes.json()).configurators;
+    const rules = (await rRes.json()).rules;
+    return NextResponse.json({ configurators, rules, source: "api" });
+  } catch {
+    return NextResponse.json(
+      { error: "Config API unreachable." },
+      { status: 502 }
+    );
+  }
 }
 
 /** Create a new configurator template. Proxies to Python POST /configurators. */

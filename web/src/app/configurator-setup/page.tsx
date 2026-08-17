@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   Download,
   FileDown,
   Info,
@@ -70,8 +71,6 @@ import {
   parseDefaultCsv,
   DEFAULT_TEMPLATE_CSV,
 } from "@/lib/default-csv";
-import { MOCK_CONFIGURATORS } from "@/lib/mock-configurators";
-import { MOCK_RULES } from "@/lib/mock-rules";
 import {
   PARAMETER_KIND_LABELS,
   type Configurator,
@@ -107,22 +106,26 @@ function rangeSummary(p: ConfiguratorParameter): string {
 
 export default function ConfiguratorSetupPage() {
   const [configurators, setConfigurators] =
-    React.useState<Configurator[]>(MOCK_CONFIGURATORS);
-  const [rules, setRules] = React.useState<ConfiguratorRule[]>(MOCK_RULES);
+    React.useState<Configurator[]>([]);
+  const [rules, setRules] = React.useState<ConfiguratorRule[]>([]);
   const [configuratorId, setConfiguratorId] = React.useState("");
-  const [source, setSource] = React.useState<"mock" | "api">("mock");
+  const [source, setSource] = React.useState<"unavailable" | "api">("unavailable");
+  const [configError, setConfigError] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState("overview");
   const [saveNotice, setSaveNotice] = React.useState<{
     kind: "ok" | "error";
     text: string;
   } | null>(null);
 
-  // Load configurators + rules from the Python API (falls back to mock).
+  // Load configurators + rules from the Python API. There is no fallback:
+  // if this fails the screen stays empty and says why, rather than showing
+  // a stand-in configurator that nobody should be editing.
   const reloadConfig = React.useCallback(async () => {
     const data = await fetchConfigData();
+    setSource(data.source);
+    setConfigError(data.error ?? null);
     if (!data.configurators?.length) return;
     setConfigurators(data.configurators);
-    setSource(data.source);
     setConfiguratorId((prev) =>
       data.configurators.some((c) => c.id === prev)
         ? prev
@@ -134,17 +137,19 @@ export default function ConfiguratorSetupPage() {
     let active = true;
     fetchConfigData()
       .then((data) => {
-        if (!active || !data.configurators?.length) return;
+        if (!active) return;
+        setSource(data.source);
+        setConfigError(data.error ?? null);
+        if (!data.configurators?.length) return;
         setConfigurators(data.configurators);
         setRules(data.rules ?? []);
-        setSource(data.source);
         setConfiguratorId((prev) =>
           data.configurators.some((c) => c.id === prev)
             ? prev
             : data.configurators[0].id
         );
       })
-      .catch(() => {});
+      .catch(() => active && setConfigError("Could not reach the config API."));
     return () => {
       active = false;
     };
@@ -590,14 +595,28 @@ export default function ConfiguratorSetupPage() {
           <h1 className="text-2xl font-bold tracking-tight">
             Configurator Setup
           </h1>
-          <Badge variant={source === "api" ? "success" : "secondary"}>
-            {source === "api" ? "Source: Python API" : "Source: mock"}
+          <Badge variant={source === "api" ? "success" : "destructive"}>
+            {source === "api" ? "Source: Python API" : "Config API unavailable"}
           </Badge>
         </div>
         <p className="text-muted-foreground">
           Define the parameters and rules for each of the 7 configurators.
         </p>
       </div>
+
+      {configError && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div>
+            <p className="font-medium">Configuration could not be loaded.</p>
+            <p className="text-muted-foreground">{configError}</p>
+            <p className="mt-1 text-muted-foreground">
+              Nothing is shown and nothing can be saved until this is fixed —
+              there is no offline copy of the configurator to fall back on.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
         <Info className="h-4 w-4 shrink-0 text-primary" />
