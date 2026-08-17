@@ -1,0 +1,16 @@
+# Never bake secrets or local cruft into the image
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+config/
+
+.git/
+.gitignore
+*.md
