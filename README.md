@@ -176,9 +176,11 @@ No startup command needed — the Dockerfile's `CMD` already binds `$PORT`.
 | `ALLOWED_ORIGINS` | `https://<your-web-app>.azurewebsites.net` |
 | `WEBSITES_PORT` | `8000` |
 
-The M1 server must accept connections from the Web App's outbound IPs, or be
-reached over VNet integration / a private endpoint. This is the step that most
-often blocks a first deploy — the app starts fine and every query then fails.
+The API app needs **VNet integration** so it can reach the M1 SQL Server —
+`core-vnet/appservice` in the Estimator-App resource group, the same integration
+the original app uses. This is the step that most often blocks a first deploy:
+the app starts fine, reports Running, and every query times out. Set the app's
+**Health Check** path to `/status` so that failure is visible rather than silent.
 
 ### GitHub secrets
 
@@ -192,9 +194,10 @@ The API workflow polls `/status` after deploying and fails the run if it does no
 return 200 within five minutes, so a broken deploy is visible in Actions rather
 than discovered by a salesperson.
 
-> `.github/workflows/main_rapid-door-estimator.yml` still deploys the **legacy
-> Streamlit app** from the repo root. It is untouched and will keep running on
-> pushes to `main`. Delete it once the Streamlit app is retired.
+> `.github/workflows/main_rapid-door-estimator.yml` deploys the original
+> **Streamlit proof of concept** from the repo root. The web app is the staging
+> and production version; Streamlit is kept only as a reference while the two
+> are compared. Delete the workflow when it is retired.
 
 ---
 
@@ -276,7 +279,7 @@ each file restores parameters, options, rules and conditions exactly.
 │       ├── components/admin/     configurator setup UI
 │       └── components/quote/     quoting + configurator wizard
 ├── db/                   schema, migrations, seeds, backups
-├── src/                  legacy Streamlit app (still in production)
+├── src/                  the Streamlit proof of concept
 └── .github/workflows/    Azure deployments
 ```
 

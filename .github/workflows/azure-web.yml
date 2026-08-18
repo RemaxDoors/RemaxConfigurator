@@ -1,7 +1,10 @@
 # Deploys the Next.js front end (web/) to an Azure Web App running Node.
 #
 # One-time Azure setup:
-#   1. Create a Linux Web App, runtime "Node 20 LTS".
+#   1. A Linux Web App with runtime "Node 20 LTS". The existing
+#      rapid-door-estimator app can be switched from Python to Node and
+#      reused — it already has the VNet integration and the Entra sign-in,
+#      which are the fiddly parts to recreate.
 #   2. Configuration > General settings > Startup Command:  node server.js
 #   3. Configuration > Application settings:
 #        API_URL   = https://<your-api-app>.azurewebsites.net
@@ -18,9 +21,15 @@ on:
       - "web/**"
       - ".github/workflows/azure-web.yml"
   workflow_dispatch:
+    inputs:
+      app_name:
+        description: "Azure Web App to deploy to"
+        required: true
+        default: rapid-door-estimator
 
 env:
-  AZURE_WEBAPP_NAME: remax-configurator-web
+  # Run it by hand and you pick the app; a push to main uses the default.
+  AZURE_WEBAPP_NAME: ${{ github.event.inputs.app_name || 'rapid-door-estimator' }}
   NODE_VERSION: "20.x"
 
 jobs:
