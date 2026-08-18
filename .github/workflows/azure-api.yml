@@ -10,6 +10,8 @@
 #   3. Configuration > Application settings:
 #        DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD   (M1 SQL Server)
 #        CONFIG_DB_NAME = RP_config
+#        CONFIG_DB_SERVER / _USER / _PASSWORD  (only if the config DB is not
+#          on the same server as M1 — e.g. Azure SQL with an on-prem M1)
 #        DB_DRIVER      = ODBC Driver 18 for SQL Server   (the one in the image)
 #        ALLOWED_ORIGINS= https://<your-web-app>.azurewebsites.net
 #        WEBSITES_PORT  = 8000

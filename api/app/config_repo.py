@@ -28,11 +28,11 @@ def get_config_engine():
     global _engine
     if _engine is None:
         params = urllib.parse.quote_plus(
-            f"DRIVER={{{settings.DB_DRIVER}}};"
-            f"SERVER={settings.DB_SERVER};"
+            f"DRIVER={{{settings.CONFIG_DB_DRIVER}}};"
+            f"SERVER={settings.CONFIG_DB_SERVER};"
             f"DATABASE={settings.CONFIG_DB_NAME};"
-            f"UID={settings.DB_USER};"
-            f"PWD={settings.DB_PASSWORD};"
+            f"UID={settings.CONFIG_DB_USER};"
+            f"PWD={settings.CONFIG_DB_PASSWORD};"
             "TrustServerCertificate=yes;"
         )
         _engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}")
