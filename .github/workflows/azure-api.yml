@@ -4,10 +4,24 @@
 # the Microsoft ODBC driver installed at OS level, and api/Dockerfile bakes
 # msodbcsql18 in. A plain Python App Service has no reliable way to do that.
 #
+# Authentication is by service principal throughout — the registry's admin
+# account is deliberately disabled, so there is no ACR username/password to
+# use. `az acr login` mints a short-lived token from the same principal that
+# deploys, which means one secret instead of four and nothing long-lived.
+#
 # One-time Azure setup:
-#   1. Create an Azure Container Registry (Basic is enough).
-#   2. Create a Linux Web App, "Publish: Container", pointing at that registry.
-#   3. Configuration > Application settings:
+#   1. Azure Container Registry (Basic is enough) — remaxconfiguratoracr.
+#   2. A Linux Web App, "Publish: Container", on the existing App Service plan.
+#   3. The Web App needs a system-assigned managed identity, and that identity
+#      needs the AcrPull role on the registry — otherwise the deploy succeeds
+#      and the app then fails to pull the image it was told to run.
+#        Registry > Access control (IAM) > Add role assignment
+#          > AcrPull > Managed identity > remax-configurator-api
+#   4. VNet integration on the Web App (core-vnet/appservice) so it can reach
+#      the M1 SQL Server. Without it the app starts, reports Running, and every
+#      query times out.
+#   5. Health check path: /status
+#   6. Configuration > Application settings:
 #        DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD   (M1 SQL Server)
 #        CONFIG_DB_NAME = RP_config
 #        CONFIG_DB_SERVER / _USER / _PASSWORD  (only if the config DB is not
@@ -16,11 +30,10 @@
 #        ALLOWED_ORIGINS= https://<your-web-app>.azurewebsites.net
 #        WEBSITES_PORT  = 8000
 #      Store DB_PASSWORD as a Key Vault reference, not a literal.
-#   4. Secrets in GitHub: AZURE_CREDENTIALS, ACR_LOGIN_SERVER,
-#      ACR_USERNAME, ACR_PASSWORD.
 #
-# The M1 database must allow inbound connections from the Web App's outbound
-# IPs, or be reached over a VNet integration / private endpoint.
+# GitHub secret required: AZURE_CREDENTIALS only.
+#   The service principal needs AcrPush on the registry (to push the image) and
+#   Contributor on the Web App (to set the image it runs).
 name: Deploy API to Azure
 
 on:
@@ -30,9 +43,19 @@ on:
       - "api/**"
       - ".github/workflows/azure-api.yml"
   workflow_dispatch:
+    inputs:
+      app_name:
+        description: "Azure Web App to deploy to"
+        required: true
+        default: remax-configurator-api
 
 env:
-  AZURE_WEBAPP_NAME: remax-configurator-api
+  # Run it by hand and you pick the app; a push to main uses the default.
+  AZURE_WEBAPP_NAME: ${{ github.event.inputs.app_name || 'remax-configurator-api' }}
+  # Registry names are not secrets — keeping them here makes the image tags
+  # readable in the run log, which matters when you need to roll back to one.
+  ACR_NAME: remaxconfiguratoracr
+  ACR_LOGIN_SERVER: remaxconfiguratoracr.azurecr.io
   IMAGE_NAME: remax-configurator-api
 
 jobs:
@@ -47,11 +70,15 @@ jobs:
           pip install -r api/requirements.txt
           cd api && python -c "import app.main" && python app/formula.py
 
-      - uses: docker/login-action@v3
+      - name: Sign in to Azure
+        uses: azure/login@v2
         with:
-          registry: ${{ secrets.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Sign in to the container registry
+        # Uses the Azure session above rather than admin credentials, which are
+        # disabled on this registry.
+        run: az acr login --name ${{ env.ACR_NAME }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -59,18 +86,16 @@ jobs:
           context: ./api
           push: true
           tags: |
-            ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
-
-      - uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Deploy
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          images: ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          # Pinned to the commit, not :latest — a rollback is redeploying an
+          # earlier tag, with no rebuild and no ambiguity about what is running.
+          images: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Smoke-test /status
         run: |

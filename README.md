@@ -188,7 +188,17 @@ the app starts fine, reports Running, and every query times out. Set the app's
 |---|---|
 | `AZURE_WEBAPP_PUBLISH_PROFILE` | web |
 | `AZURE_CREDENTIALS` | api |
-| `ACR_LOGIN_SERVER`, `ACR_USERNAME`, `ACR_PASSWORD` | api |
+
+The API workflow authenticates to the container registry with `az acr login`
+using that same service principal, so there is no registry username or password
+to store — the registry's admin account stays disabled. The service principal
+needs **AcrPush** on the registry and **Contributor** on the Web App, and the
+Web App's managed identity needs **AcrPull** so it can pull the image it is told
+to run.
+
+Neither app needs to be linked in Azure's **Deployment Center**. That wizard
+generates its own workflow and commits it to the repository, which would then
+compete with these for the same app.
 
 The API workflow polls `/status` after deploying and fails the run if it does not
 return 200 within five minutes, so a broken deploy is visible in Actions rather
