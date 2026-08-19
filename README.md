@@ -191,17 +191,23 @@ the app starts fine, reports Running, and every query times out. Set the app's
 
 ### GitHub secrets
 
-| Secret | Used by |
-|---|---|
-| `AZURE_WEBAPP_PUBLISH_PROFILE` | web |
-| `AZURE_CREDENTIALS` | api |
+Both workflows authenticate with **OIDC federated identity** — no stored
+password, no publish profile, no registry credentials. They reuse the
+`AZUREAPPSERVICE_CLIENTID_*`, `_TENANTID_*` and `_SUBSCRIPTIONID_*` secrets that
+Azure Deployment Center created for this repository, and each job requests a
+short-lived token via `permissions: id-token: write`.
 
-The API workflow authenticates to the container registry with `az acr login`
-using that same service principal, so there is no registry username or password
-to store — the registry's admin account stays disabled. The service principal
-needs **AcrPush** on the registry and **Contributor** on the Web App, and the
-Web App's managed identity needs **AcrPull** so it can pull the image it is told
-to run.
+What the federated identity needs, beyond what it already had:
+
+| Grant | Where | Why |
+|---|---|---|
+| **Contributor** | `remax-configurator-api` | set the image the app runs |
+| **AcrPush** | `remaxconfiguratoracr` | push the built image |
+| **AcrPull** | the API app's managed identity, on the registry | let the app pull it |
+
+The federated credential's subject is tied to a branch. Deployment Center
+created it for `main`, so a `workflow_dispatch` run from a feature branch will
+fail to authenticate unless a matching credential is added for that ref.
 
 Neither app needs to be linked in Azure's **Deployment Center**. That wizard
 generates its own workflow and commits it to the repository, which would then

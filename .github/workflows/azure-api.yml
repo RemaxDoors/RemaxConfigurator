@@ -31,7 +31,8 @@
 #        WEBSITES_PORT  = 8000
 #      Store DB_PASSWORD as a Key Vault reference, not a literal.
 #
-# GitHub secret required: AZURE_CREDENTIALS only.
+# No stored secret: authentication is OIDC federated identity, using the
+# AZUREAPPSERVICE_* secrets Deployment Center created for this repository.
 #   The service principal needs AcrPush on the registry (to push the image) and
 #   Contributor on the Web App (to set the image it runs).
 name: Deploy API to Azure
@@ -61,6 +62,12 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    # OIDC: azure/login exchanges a short-lived GitHub token for an Azure one,
+    # so there is no client secret stored anywhere. id-token: write is what
+    # lets the runner request that token.
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -71,26 +78,22 @@ jobs:
           cd backend && python -c "import app.main" && python app/formula.py
 
       - name: Check the Azure credentials are present
-        # azure/login fails with "Ensure 'client-id' and 'tenant-id' are
-        # supplied" when the secret is missing, which reads like a workflow bug
-        # rather than an unset secret. Say what is actually wrong, and print the
-        # command as one line so it can be pasted straight into a shell.
         run: |
-          if [ -z "${{ secrets.AZURE_CREDENTIALS }}" ]; then
-            echo "::error::AZURE_CREDENTIALS is not set on this repository."
-            echo "Create the service principal with the command below, then paste"
-            echo "the whole JSON object into Settings > Secrets and variables >"
-            echo "Actions > New repository secret, named AZURE_CREDENTIALS."
-            echo ""
-            echo "  az ad sp create-for-rbac --name remax-configurator-deploy --role contributor --scopes /subscriptions/SUB_ID/resourceGroups/estimator-app --sdk-auth"
+          if [ -z "${{ secrets.AZUREAPPSERVICE_CLIENTID_BA3CC3A78F13426BB5AB97009A81433D }}" ]; then
+            echo "::error::The AZUREAPPSERVICE_CLIENTID_... secret is missing."
+            echo "These three secrets come from Azure Deployment Center and are"
+            echo "already used by this repository. Check they still exist under"
+            echo "Settings > Secrets and variables > Actions."
             exit 1
           fi
-          echo "AZURE_CREDENTIALS is set"
+          echo "Azure federated credentials are present"
 
       - name: Sign in to Azure
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BA3CC3A78F13426BB5AB97009A81433D }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_527ED56A30554F39BDCCDDB327FDA5A2 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_8010676516614B76ABB4A1684989F293 }}
 
       - name: Sign in to the container registry
         # Uses the Azure session above rather than admin credentials, which are
