@@ -1,7 +1,7 @@
 # Deploys the Next.js front end (frontend/) to an Azure Web App running Node.
 #
 # One-time Azure setup:
-#   1. A Linux Web App with runtime "Node 20 LTS". The existing
+#   1. A Linux Web App with runtime "Node 22 LTS". The existing
 #      rapid-door-estimator app can be switched from Python to Node and
 #      reused — it already has the VNet integration and the Entra sign-in,
 #      which are the fiddly parts to recreate.
@@ -30,7 +30,10 @@ on:
 env:
   # Run it by hand and you pick the app; a push to main uses the default.
   AZURE_WEBAPP_NAME: ${{ github.event.inputs.app_name || 'rapid-door-estimator' }}
-  NODE_VERSION: "20.x"
+  # Match the Web App's runtime stack. The standalone bundle has no
+  # native modules, so a mismatch is survivable — but building and
+  # running on the same major removes a class of subtle differences.
+  NODE_VERSION: "22.x"
 
 jobs:
   build-and-deploy:

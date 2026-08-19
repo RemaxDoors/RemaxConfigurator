@@ -28,7 +28,7 @@ credentials stay server-side and never reach the browser.
 
 ### Prerequisites
 
-- **Node.js 20+** and npm
+- **Node.js 20+** and npm (Azure runs 22 LTS)
 - **Python 3.12+**
 - **ODBC Driver 17 for SQL Server** ([download](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server))
 - Network access to the M1 SQL Server
@@ -139,7 +139,7 @@ Two Azure Web Apps, deployed by two GitHub Actions workflows on push to `main`.
 
 | Component | Azure resource | Workflow |
 |---|---|---|
-| `frontend/` | Web App, **Node 20 LTS** | `.github/workflows/azure-web.yml` |
+| `frontend/` | Web App, **Node 22 LTS** | `.github/workflows/azure-web.yml` |
 | `backend/` | Web App **for Containers** | `.github/workflows/azure-api.yml` |
 
 The API ships as a **container**, not a code deployment, because `pyodbc` needs the
