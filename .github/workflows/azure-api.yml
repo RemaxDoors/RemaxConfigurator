@@ -70,6 +70,24 @@ jobs:
           pip install -r backend/requirements.txt
           cd backend && python -c "import app.main" && python app/formula.py
 
+      - name: Check the Azure credentials are present
+        # azure/login fails with "Ensure 'client-id' and 'tenant-id' are
+        # supplied" when the secret is missing, which reads like a workflow bug
+        # rather than an unset secret. Say what is actually wrong.
+        run: |
+          if [ -z "${{ secrets.AZURE_CREDENTIALS }}" ]; then
+            echo "::error::AZURE_CREDENTIALS is not set on this repository."
+            echo "Create it with:"
+            echo "  az ad sp create-for-rbac --name remax-configurator-deploy \"
+            echo "    --role contributor \"
+            echo "    --scopes /subscriptions/<sub-id>/resourceGroups/estimator-app \"
+            echo "    --sdk-auth"
+            echo "Paste the whole JSON object into Settings > Secrets and"
+            echo "variables > Actions > New repository secret."
+            exit 1
+          fi
+          echo "AZURE_CREDENTIALS is set"
+
       - name: Sign in to Azure
         uses: azure/login@v2
         with:
