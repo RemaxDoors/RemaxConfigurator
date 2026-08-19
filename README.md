@@ -153,7 +153,7 @@ Next.js is built with `output: "standalone"`, which emits a `server.js`.
 **Configuration → General settings → Startup Command:**
 
 ```bash
-node server.js
+sh startup.sh
 ```
 
 **Configuration → Application settings:**
@@ -161,13 +161,14 @@ node server.js
 | Setting | Value |
 |---|---|
 | `API_URL` | `https://<your-api-app>.azurewebsites.net` |
-| `HOSTNAME` | `0.0.0.0` |
 | `SIMPRO_BASE_URL` | your Simpro API base |
 | `SIMPRO_API_TOKEN` | Key Vault reference |
 
-`HOSTNAME` is not optional. The standalone server binds to `$HOSTNAME`, and App
-Service sets that to the machine name — the app starts, listens on nothing
-reachable, and every request times out.
+`frontend/startup.sh` sets `HOSTNAME=0.0.0.0` before starting the server. That
+matters: App Service sets `HOSTNAME` to the machine name, the standalone server
+binds to it, and the app then reports *Running* while listening on nothing
+reachable. Keeping it in the script rather than an app setting means it travels
+with the code.
 
 ### API app: settings
 

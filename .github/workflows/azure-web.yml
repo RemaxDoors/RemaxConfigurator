@@ -5,12 +5,12 @@
 #      rapid-door-estimator app can be switched from Python to Node and
 #      reused — it already has the VNet integration and the Entra sign-in,
 #      which are the fiddly parts to recreate.
-#   2. Configuration > General settings > Startup Command:  node server.js
+#   2. Configuration > General settings > Startup Command:  sh startup.sh
+#      That script forces HOSTNAME=0.0.0.0. Without it the standalone server
+#      binds to the machine name App Service supplies and listens on nothing
+#      reachable — so no HOSTNAME app setting is needed.
 #   3. Configuration > Application settings:
 #        API_URL   = https://<your-api-app>.azurewebsites.net
-#        HOSTNAME  = 0.0.0.0
-#      HOSTNAME matters: the standalone server binds to $HOSTNAME, and App
-#      Service sets that to the machine name, which listens on nothing useful.
 #   4. Set the AZURE_WEBAPP_PUBLISH_PROFILE secret (Get publish profile).
 name: Deploy web to Azure
 
@@ -67,6 +67,10 @@ jobs:
         run: |
           cp -r .next/static .next/standalone/.next/static
           if [ -d public ]; then cp -r public .next/standalone/public; fi
+          # The startup command runs from the deployed root, so the script has
+          # to be inside the bundle rather than alongside it in the repo.
+          cp startup.sh .next/standalone/startup.sh
+          chmod +x .next/standalone/startup.sh
           # Next copies .env into the standalone output. CI never checks one
           # out, but strip it anyway so the same commands are safe to run by
           # hand on a machine that does have real credentials in frontend/.env.
