@@ -118,11 +118,24 @@ jobs:
           images: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Smoke-test /status
+        # Ask Azure for the hostname rather than assuming <app>.azurewebsites.net.
+        # New Web Apps get a generated hostname with a random hash, for example
+        # remax-configurator-api-f5aafahgb9e2fcfu.australiaeast-01.azurewebsites.net
+        # which Microsoft added to prevent subdomain takeover. Constructing the
+        # plain form gives a name that does not resolve, so this step would fail
+        # a perfectly healthy deployment.
         run: |
+          host=$(az webapp show --name "${{ env.AZURE_WEBAPP_NAME }}" --resource-group Estimator-App --query defaultHostName -o tsv)
+          echo "polling https://${host}/status"
           for i in $(seq 1 20); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" \
-              "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/status" || true)
-            if [ "$code" = "200" ]; then echo "API is up"; exit 0; fi
-            echo "attempt $i: HTTP $code"; sleep 15
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://${host}/status" || true)
+            if [ "$code" = "200" ]; then
+              echo "API is up"
+              curl -s "https://${host}/status"
+              exit 0
+            fi
+            echo "attempt $i: HTTP $code"
+            sleep 15
           done
-          echo "API did not return 200 within 5 minutes"; exit 1
+          echo "API did not return 200 within 5 minutes"
+          exit 1
