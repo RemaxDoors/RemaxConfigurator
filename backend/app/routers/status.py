@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from sqlalchemy import text
 
 from .. import config_repo, m1_pricing, settings
+from ..version import __version__
 
 router = APIRouter(tags=["status"])
 
@@ -102,6 +103,9 @@ def status():
 
     return {
         "ok": all(c["ok"] for c in checks),
+        # First thing to check when a fix "hasn't worked": whether the build
+        # carrying it is the one actually running.
+        "version": __version__,
         "checks": checks,
         "configurators": configurators,
         "warnings": warnings,
