@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# M1 SQL Server (same values as the Streamlit app's src/.env)
+# M1 SQL Server
 DB_SERVER = os.getenv("DB_SERVER")
 DB_NAME = os.getenv("DB_NAME")
 DB_USER = os.getenv("DB_USER")

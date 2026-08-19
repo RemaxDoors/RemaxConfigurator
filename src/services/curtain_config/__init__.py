@@ -1,1 +1,0 @@
-"""Curtain configurator helpers."""

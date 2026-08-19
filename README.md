@@ -1,8 +1,8 @@
 # Remax Configurator
 
-Sales quoting and door configuration for Remax rapid doors. Replaces the Streamlit
-proof of concept with a three-tier app that reads prices from **M1 (ECI ERP)** and
-keeps its configurator definition in a database rather than in Python code.
+Sales quoting and door configuration for Remax rapid doors. Reads prices from
+**M1 (ECI ERP)** and keeps its configurator definition in a database rather than
+in Python code, so a rule change is an edit rather than a deployment.
 
 ```
 ┌──────────────┐   HTTPS   ┌──────────────┐   ODBC   ┌────────────────────┐
@@ -37,13 +37,12 @@ credentials stay server-side and never reach the browser.
 
 Both tiers read from gitignored `.env` files.
 
-> **The API's settings come from the repo-root `.env`**, which it shares with the
-> Streamlit app. `settings.py` calls `load_dotenv()` with no path, and
-> python-dotenv walks *up* from the working directory and stops at the first
-> `.env` it finds. Since `run-api.cmd` starts uvicorn from `api/`, creating an
-> `api/.env` **shadows the root one** — the API then sees only what that file
-> contains and loses the M1 credentials entirely. Put API settings in the root
-> `.env` unless you intend to move all of them there.
+> **The API's settings come from the repo-root `.env`.** `settings.py` calls
+> `load_dotenv()` with no path, and python-dotenv walks *up* from the working
+> directory and stops at the first `.env` it finds. Since the API starts from
+> its own directory, creating an `.env` **there** shadows the root one — the API
+> then sees only that file and loses the M1 credentials entirely. Keep API
+> settings in the root `.env` unless you move all of them together.
 
 ```bash
 cp web/.env.example web/.env
@@ -84,14 +83,21 @@ sqlcmd -S <server> -d RP_config -i db/uCfg_rules_add_quantity_fields.sql
 sqlcmd -S <server> -d RP_config -i db/uCfg_rules_add_condition_formula.sql
 ```
 
-Then seed the configurator definitions:
-
 ```bash
-python db/migrate_all.py
-sqlcmd -S <server> -d RP_config -i db/seed_movidor_generated.sql
+sqlcmd -S <server> -d RP_config -i db/uCfg_schema_catchup.sql
 ```
 
-All migrations are re-runnable.
+Then load the configurator definitions — parameters, options, defaults, rules,
+validations, in foreign-key order:
+
+```bash
+sqlcmd -S <server> -d RP_config -i db/RP_config_data.sql
+```
+
+All of it is re-runnable. Regenerate that data file from a live database with
+`python db/export_config_data.py`, which is also how you copy a known-good
+configuration to another server — SQL Server backups only restore forward, so a
+database from a newer engine cannot be restored onto an older one.
 
 ### 3. Start
 
@@ -204,11 +210,6 @@ The API workflow polls `/status` after deploying and fails the run if it does no
 return 200 within five minutes, so a broken deploy is visible in Actions rather
 than discovered by a salesperson.
 
-> `.github/workflows/main_rapid-door-estimator.yml` deploys the original
-> **Streamlit proof of concept** from the repo root. The web app is the staging
-> and production version; Streamlit is kept only as a reference while the two
-> are compared. Delete the workflow when it is retired.
-
 ---
 
 ## How the configurator works
@@ -289,22 +290,18 @@ each file restores parameters, options, rules and conditions exactly.
 │       ├── components/admin/     configurator setup UI
 │       └── components/quote/     quoting + configurator wizard
 ├── db/                   schema, migrations, seeds, backups
-├── src/                  the Streamlit proof of concept
 └── .github/workflows/    Azure deployments
 ```
 
-### Retiring Streamlit
+### The pricing rules
 
-The dependency between the two apps now runs the *other* way. `api/` is
-self-contained; the pricing rules live in `api/app/pricing_rules/`, and the
-three modules left behind in `src/services/` are thin shims that load them
-through `src/services/_pricing_bridge.py`.
+`api/app/pricing_rules/` holds the original hard-coded upgrade and installation
+rules, moved here from the Streamlit proof of concept when it was retired.
 
-That bridge exists because both packages would otherwise be called `app` —
-Streamlit's entry point is `src/app.py`, so whichever lands on `sys.path` first
-wins. The bridge loads the package straight off disk under its own name instead.
+They are the *old* engine. The replacement is the data-driven rules in
+`uCfgRules`, evaluated by `validation_engine.rule_matches()` and
+`formula.evaluate()`. Deleting this package is the goal, but it needs the
+database rules proven at parity first — a silent difference there is a wrong
+quote. `api/tests/check_pricing_parity.py` is the harness for that: point it at
+the DB-driven engine and it names the configurations that disagree.
 
-To retire Streamlit: delete `src/`, the three shims go with it, and nothing in
-`api/` changes. Deleting `api/app/pricing_rules/` is a separate, later job — it
-needs the DB rules in `uCfgRules` to be proven at parity first, since a silent
-difference there is a wrong quote.
