@@ -73,17 +73,16 @@ jobs:
       - name: Check the Azure credentials are present
         # azure/login fails with "Ensure 'client-id' and 'tenant-id' are
         # supplied" when the secret is missing, which reads like a workflow bug
-        # rather than an unset secret. Say what is actually wrong.
+        # rather than an unset secret. Say what is actually wrong, and print the
+        # command as one line so it can be pasted straight into a shell.
         run: |
           if [ -z "${{ secrets.AZURE_CREDENTIALS }}" ]; then
             echo "::error::AZURE_CREDENTIALS is not set on this repository."
-            echo "Create it with:"
-            echo "  az ad sp create-for-rbac --name remax-configurator-deploy \"
-            echo "    --role contributor \"
-            echo "    --scopes /subscriptions/<sub-id>/resourceGroups/estimator-app \"
-            echo "    --sdk-auth"
-            echo "Paste the whole JSON object into Settings > Secrets and"
-            echo "variables > Actions > New repository secret."
+            echo "Create the service principal with the command below, then paste"
+            echo "the whole JSON object into Settings > Secrets and variables >"
+            echo "Actions > New repository secret, named AZURE_CREDENTIALS."
+            echo ""
+            echo "  az ad sp create-for-rbac --name remax-configurator-deploy --role contributor --scopes /subscriptions/SUB_ID/resourceGroups/estimator-app --sdk-auth"
             exit 1
           fi
           echo "AZURE_CREDENTIALS is set"
