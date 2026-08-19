@@ -15,13 +15,22 @@ _col_cache: dict = {}
 
 
 def column_exists(conn, table: str, column: str) -> bool:
-    """Cached check so the app keeps working before a migration is applied."""
+    """Cached check so the app keeps working before a migration is applied.
+
+    Only a positive result is cached. Caching "missing" would pin the answer for
+    the life of the process, so applying the migration would appear to do
+    nothing until someone restarted the API — which is exactly the kind of
+    thing that gets diagnosed as "the script didn't work".
+    """
     key = (table.lower(), column.lower())
-    if key not in _col_cache:
-        _col_cache[key] = conn.execute(
-            text(f"SELECT COL_LENGTH('dbo.{table}', '{column}')")
-        ).scalar() is not None
-    return _col_cache[key]
+    if _col_cache.get(key):
+        return True
+    present = conn.execute(
+        text(f"SELECT COL_LENGTH('dbo.{table}', '{column}')")
+    ).scalar() is not None
+    if present:
+        _col_cache[key] = True
+    return present
 
 
 def get_config_engine():

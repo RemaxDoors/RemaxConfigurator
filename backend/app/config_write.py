@@ -8,7 +8,7 @@ import json
 
 from sqlalchemy import text
 
-from . import config_repo
+from . import config_repo, settings
 
 
 def _cfg_id(conn, configurator_id: str):
@@ -340,6 +340,16 @@ def upsert_parameter(configurator_id: str, param: dict, changed_by: str = "admin
         control = param["controlName"]
         old_snap = _read_param_full(conn, cfg_id, control)
         has_section = config_repo.column_exists(conn, "uCfgParameters", "Section")
+        # Without the column the statements below quietly drop Section and still
+        # report success, so the admin UI says "saved" and the value vanishes.
+        # Only object when a section was actually supplied — saving a parameter
+        # that has no section is legitimate on an un-migrated database.
+        if not has_section and (param.get("section") or "").strip():
+            raise ValueError(
+                "This database has no uCfgParameters.Section column, so the "
+                "section cannot be saved — run db/uCfg_add_section.sql against "
+                f"'{settings.CONFIG_DB_NAME}' first."
+            )
 
         vals = {
             "label": param.get("label") or control,
