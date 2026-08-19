@@ -24,10 +24,10 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 The **rules/configurators endpoints work without a database**. The `/customers`
-endpoint returns 503 until `DB_*` are set in `api/.env` (same values as
+endpoint returns 503 until `DB_*` are set in `backend/.env` (same values as
 `src/.env`, plus the ODBC driver).
 
 ## Wiring to the Next app
-Set `API_URL=http://localhost:8000` in `web/.env` (or `.env.local`) and restart the
+Set `API_URL=http://localhost:8000` in `frontend/.env` (or `.env.local`) and restart the
 Next dev server. The Next app then reads configurators/rules from here (falling back
 to its bundled mock if the API is unreachable).

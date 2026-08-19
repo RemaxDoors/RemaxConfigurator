@@ -4,8 +4,8 @@ Run after touching anything in app/pricing_rules — it is a lift-and-shift of
 the rules the business has been quoting from, so any output change is a bug
 until proven otherwise.
 
-    python api/tests/check_pricing_parity.py --record   # write the baseline
-    python api/tests/check_pricing_parity.py            # compare against it
+    python backend/tests/check_pricing_parity.py --record   # write the baseline
+    python backend/tests/check_pricing_parity.py            # compare against it
 
 The same harness is what will retire app/pricing_rules: point it at the
 DB-driven engine and it shows exactly which configurations disagree.

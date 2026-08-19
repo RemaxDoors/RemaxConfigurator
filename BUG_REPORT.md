@@ -35,7 +35,7 @@
 - **Expected:** Persist the quote (draft) and produce the M1 write payload (per SOW).
 - **Actual:** Nothing is saved.
 - **Probable cause:** Feature not yet built (post‑configurator step).
-- **Evidence:** `grep -niE "save|POST|fetch|localStorage" web/src/app/quote/[id]/page.tsx` → only a toast string.
+- **Evidence:** `grep -niE "save|POST|fetch|localStorage" frontend/src/app/quote/[id]/page.tsx` → only a toast string.
 - **Fix:** Add a Save flow → persist draft (DB or localStorage interim) + build the uQuotes/uQuoteLines/uConfiguratorValues payload; wire to the API write endpoint (coordinate with ECI’s "Create Quote from HubSpot" contract).
 - **Regression risk:** New feature — low risk to existing flows.
 
@@ -100,7 +100,7 @@ The wizard renders `required` markers but does not block Add when a required fie
 ## D. Integration & data‑flow defects
 
 - **BUG‑I1 — Retrieve saved quote:** opening `/quote/<id>` loads empty `MOCK_QUOTE_LINES` (placeholder), not a real record. Ties to BUG‑C1. Evidence: `page.tsx makeQuote`.
-- **BUG‑I2 — Config API mock fallback in prod path:** `/api/config` and `configurator-setup` fall back to (empty) `MOCK_CONFIGURATORS/MOCK_RULES` when the API is down — the admin then silently shows nothing rather than an error state. Evidence: `api/config/route.ts`, `configurator-setup/page.tsx:65‑66`.
+- **BUG‑I2 — Config API mock fallback in prod path:** `/api/config` and `configurator-setup` fall back to (empty) `MOCK_CONFIGURATORS/MOCK_RULES` when the API is down — the admin then silently shows nothing rather than an error state. Evidence: `backend/config/route.ts`, `configurator-setup/page.tsx:65‑66`.
 - **BUG‑I3 — Rules not persisted:** admin rules live in local state; `uCfgRules` is empty; rule edits/imports don’t persist to the DB. Known/expected but blocks rule‑driven pricing from being admin‑managed. 
 - **Data‑flow trace (door):** user input → wizard state → `/price` (M1) → breakdown → line fields (✅ now) → **STOPS** (no save → no M1 payload → no persisted record). The break is at persistence (BUG‑C1).
 

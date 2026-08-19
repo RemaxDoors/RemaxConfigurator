@@ -2,7 +2,7 @@
 
 **Reviewer role:** Senior QA / full‑stack review
 **Date:** 2026‑07‑31
-**Build under test:** local dev — Next.js web (`web/`, :3000) + FastAPI (`api/`, :8000) + SQL Server (M1 = `M1_RP`, config DB = `new`) + Simpro (read‑only).
+**Build under test:** local dev — Next.js web (`frontend/`, :3000) + FastAPI (`backend/`, :8000) + SQL Server (M1 = `M1_RP`, config DB = `new`) + Simpro (read‑only).
 **Change policy:** Review only. No application code modified in this phase.
 
 ---
@@ -10,12 +10,12 @@
 ## 1. Understanding of the application
 
 ### Architecture
-- **Frontend** — Next.js 14 App Router + TypeScript + Tailwind (`web/`). Pages: `/` (launcher), `/quote/[id]`, `/configurator-setup` (admin), `/simpro`, `/settings`.
-- **Backend** — FastAPI (`api/`). Routers: `configurators`, `customers`, `pricing` (+ `/parts`), `validation`, plus config write endpoints. Reads config metadata from the `new` DB and prices/searches from `M1_RP`. Reuses the old Streamlit rule engine (`src/services/...`, pure modules) for upgrade/installation part selection.
-- **BFF proxy routes** (`web/src/app/api/*`) — forward browser calls to the Python API so credentials stay server‑side.
+- **Frontend** — Next.js 14 App Router + TypeScript + Tailwind (`frontend/`). Pages: `/` (launcher), `/quote/[id]`, `/configurator-setup` (admin), `/simpro`, `/settings`.
+- **Backend** — FastAPI (`backend/`). Routers: `configurators`, `customers`, `pricing` (+ `/parts`), `validation`, plus config write endpoints. Reads config metadata from the `new` DB and prices/searches from `M1_RP`. Reuses the old Streamlit rule engine (`src/services/...`, pure modules) for upgrade/installation part selection.
+- **BFF proxy routes** (`frontend/src/app/api/*`) — forward browser calls to the Python API so credentials stay server‑side.
 - **Databases** — `new` (uCfg* configurator definition tables) and `M1_RP` (ERP: `uSellPriceMatrixs`, `PartUnitSalePrices`, `Parts`, `PartRevisions`, `Organizations`).
 - **External** — Simpro (job search, read‑only). Microsoft/Entra auth is a "Coming soon" placeholder.
-- **Config/env** — `web/.env` (`API_URL`, Simpro creds), `api/.env` (`DB_*`, `CONFIG_DB_NAME`). Gitignored.
+- **Config/env** — `frontend/.env` (`API_URL`, Simpro creds), `backend/.env` (`DB_*`, `CONFIG_DB_NAME`). Gitignored.
 
 ### Main user journey (intended)
 1. Open a quote (`/quote/new`).

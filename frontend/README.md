@@ -33,7 +33,7 @@ Then open <http://localhost:3000>.
 ## Project structure
 
 ```
-web/
+frontend/
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx           # Root layout + fonts

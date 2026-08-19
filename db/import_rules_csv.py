@@ -13,7 +13,7 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "api"))
+sys.path.insert(0, os.path.join(ROOT, "backend"))
 
 from app import config_repo, config_write  # noqa: E402
 
@@ -24,7 +24,7 @@ TRUTHY = {"yes", "y", "true", "1", "active"}
 
 
 def parse_condition(token: str) -> dict | None:
-    """Mirror of parseCondition() in web/src/lib/rule-csv.ts."""
+    """Mirror of parseCondition() in frontend/src/lib/rule-csv.ts."""
     t = token.strip()
     if not t:
         return None

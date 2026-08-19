@@ -6,7 +6,7 @@ in Python code, so a rule change is an edit rather than a deployment.
 
 ```
 ┌──────────────┐   HTTPS   ┌──────────────┐   ODBC   ┌────────────────────┐
-│  web/        │ ────────► │  api/        │ ───────► │  SQL Server        │
+│  frontend/        │ ────────► │  backend/        │ ───────► │  SQL Server        │
 │  Next.js 14  │           │  FastAPI     │          │  • M1_RP  (read)   │
 │  App Router  │ ◄──────── │  SQLAlchemy  │ ◄─────── │  • RP_config (cfg) │
 └──────────────┘           └──────────────┘          └────────────────────┘
@@ -14,7 +14,7 @@ in Python code, so a rule change is an edit rather than a deployment.
 ```
 
 **The web tier never opens a database connection.** Everything under
-`web/src/app/api/*` is a thin proxy to the Python API, so M1 and Simpro
+`frontend/src/app/api/*` is a thin proxy to the Python API, so M1 and Simpro
 credentials stay server-side and never reach the browser.
 
 | Database | Owner | Purpose |
@@ -45,10 +45,10 @@ Both tiers read from gitignored `.env` files.
 > settings in the root `.env` unless you move all of them together.
 
 ```bash
-cp web/.env.example web/.env
+cp frontend/.env.example frontend/.env
 ```
 
-Root `.env` (see `api/.env.example` for the full list):
+Root `.env` (see `backend/.env.example` for the full list):
 
 | Setting | Example | Notes |
 |---|---|---|
@@ -59,7 +59,7 @@ Root `.env` (see `api/.env.example` for the full list):
 | `DB_DRIVER` | `ODBC Driver 17 for SQL Server` | **18** inside the Docker image |
 | `ALLOWED_ORIGINS` | `http://localhost:3000` | CORS |
 
-`web/.env`:
+`frontend/.env`:
 
 | Setting | Example | Notes |
 |---|---|---|
@@ -113,11 +113,11 @@ venv at `config\Scripts\python.exe` — edit the script if yours lives elsewhere
 Cross-platform equivalents:
 
 ```bash
-cd api && python -m uvicorn app.main:app --reload --port 8000
+cd backend && python -m uvicorn app.main:app --reload --port 8000
 ```
 
 ```bash
-cd web && npm install && npm run dev
+cd frontend && npm install && npm run dev
 ```
 
 | | URL |
@@ -139,11 +139,11 @@ Two Azure Web Apps, deployed by two GitHub Actions workflows on push to `main`.
 
 | Component | Azure resource | Workflow |
 |---|---|---|
-| `web/` | Web App, **Node 20 LTS** | `.github/workflows/azure-web.yml` |
-| `api/` | Web App **for Containers** | `.github/workflows/azure-api.yml` |
+| `frontend/` | Web App, **Node 20 LTS** | `.github/workflows/azure-web.yml` |
+| `backend/` | Web App **for Containers** | `.github/workflows/azure-api.yml` |
 
 The API ships as a **container**, not a code deployment, because `pyodbc` needs the
-Microsoft ODBC driver installed at OS level. `api/Dockerfile` bakes in `msodbcsql18`;
+Microsoft ODBC driver installed at OS level. `backend/Dockerfile` bakes in `msodbcsql18`;
 a plain Python App Service has no reliable way to install it.
 
 ### Web App: startup command and settings
@@ -256,7 +256,7 @@ each matching activation".
 Run the engine's own checks with:
 
 ```bash
-python api/app/formula.py
+python backend/app/formula.py
 ```
 
 ### ⚠️ CSV imports replace the whole set
@@ -274,7 +274,7 @@ each file restores parameters, options, rules and conditions exactly.
 ## Repository layout
 
 ```
-├── api/                  FastAPI service — all M1 access
+├── backend/                  FastAPI service — all M1 access
 │   ├── app/
 │   │   ├── formula.py            safe AST formula engine
 │   │   ├── config_repo.py        reads uCfg* tables
@@ -284,7 +284,7 @@ each file restores parameters, options, rules and conditions exactly.
 │   │   ├── pricing_rules/        upgrade + installation rules (moved from src/)
 │   │   └── routers/
 │   └── Dockerfile                includes msodbcsql18
-├── web/                  Next.js front end
+├── frontend/                  Next.js front end
 │   └── src/
 │       ├── app/api/              BFF proxy routes (no DB access)
 │       ├── components/admin/     configurator setup UI
@@ -295,13 +295,13 @@ each file restores parameters, options, rules and conditions exactly.
 
 ### The pricing rules
 
-`api/app/pricing_rules/` holds the original hard-coded upgrade and installation
+`backend/app/pricing_rules/` holds the original hard-coded upgrade and installation
 rules, moved here from the Streamlit proof of concept when it was retired.
 
 They are the *old* engine. The replacement is the data-driven rules in
 `uCfgRules`, evaluated by `validation_engine.rule_matches()` and
 `formula.evaluate()`. Deleting this package is the goal, but it needs the
 database rules proven at parity first — a silent difference there is a wrong
-quote. `api/tests/check_pricing_parity.py` is the harness for that: point it at
+quote. `backend/tests/check_pricing_parity.py` is the harness for that: point it at
 the DB-driven engine and it names the configurations that disagree.
 

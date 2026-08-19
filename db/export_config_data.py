@@ -30,7 +30,7 @@ import sys
 
 from sqlalchemy import text
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 from app import config_repo, settings  # noqa: E402
 
 # Parents before children, so the foreign keys are satisfiable as it runs.

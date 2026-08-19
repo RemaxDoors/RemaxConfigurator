@@ -1,4 +1,4 @@
-# Deploys the Next.js front end (web/) to an Azure Web App running Node.
+# Deploys the Next.js front end (frontend/) to an Azure Web App running Node.
 #
 # One-time Azure setup:
 #   1. A Linux Web App with runtime "Node 20 LTS". The existing
@@ -18,7 +18,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "web/**"
+      - "frontend/**"
       - ".github/workflows/azure-web.yml"
   workflow_dispatch:
     inputs:
@@ -42,20 +42,20 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install
-        working-directory: web
+        working-directory: frontend
         run: npm ci
 
       - name: Lint and type-check
-        working-directory: web
+        working-directory: frontend
         run: |
           npx tsc --noEmit
           npm run lint
 
       - name: Build
-        working-directory: web
+        working-directory: frontend
         # API_URL is read at request time by the BFF routes, not baked in at
         # build time, so it does not need to be present here.
         run: npm run build
@@ -63,17 +63,17 @@ jobs:
       - name: Assemble the standalone bundle
         # `output: standalone` emits server.js plus the traced node_modules,
         # but static assets and public/ are deliberately left out of it.
-        working-directory: web
+        working-directory: frontend
         run: |
           cp -r .next/static .next/standalone/.next/static
           if [ -d public ]; then cp -r public .next/standalone/public; fi
           # Next copies .env into the standalone output. CI never checks one
           # out, but strip it anyway so the same commands are safe to run by
-          # hand on a machine that does have real credentials in web/.env.
+          # hand on a machine that does have real credentials in frontend/.env.
           rm -f .next/standalone/.env .next/standalone/.env.*
 
       - name: Fail if a secret made it into the bundle
-        working-directory: web
+        working-directory: frontend
         run: |
           if find .next/standalone -maxdepth 1 -name '.env*' | grep -q .; then
             echo "An .env file is in the deploy bundle — refusing to publish."
@@ -86,4 +86,4 @@ jobs:
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: web/.next/standalone
+          package: frontend/.next/standalone

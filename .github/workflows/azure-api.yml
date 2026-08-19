@@ -1,7 +1,7 @@
-# Deploys the FastAPI service (api/) to an Azure Web App for Containers.
+# Deploys the FastAPI service (backend/) to an Azure Web App for Containers.
 #
 # It ships as a container rather than a code deployment because pyodbc needs
-# the Microsoft ODBC driver installed at OS level, and api/Dockerfile bakes
+# the Microsoft ODBC driver installed at OS level, and backend/Dockerfile bakes
 # msodbcsql18 in. A plain Python App Service has no reliable way to do that.
 #
 # Authentication is by service principal throughout — the registry's admin
@@ -40,7 +40,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "api/**"
+      - "backend/**"
       - ".github/workflows/azure-api.yml"
   workflow_dispatch:
     inputs:
@@ -67,8 +67,8 @@ jobs:
       - name: Check the app imports before shipping it
         run: |
           python -m pip install --upgrade pip
-          pip install -r api/requirements.txt
-          cd api && python -c "import app.main" && python app/formula.py
+          pip install -r backend/requirements.txt
+          cd backend && python -c "import app.main" && python app/formula.py
 
       - name: Sign in to Azure
         uses: azure/login@v2
@@ -83,7 +83,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ./api
+          context: ./backend
           push: true
           tags: |
             ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
