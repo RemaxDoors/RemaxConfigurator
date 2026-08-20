@@ -21,11 +21,21 @@ export const RULE_CSV_COLUMNS = [
   "Active",
 ] as const;
 
-/** Sample template shown by the "Template" button. */
+/**
+ * Sample template shown by the "Template" button.
+ *
+ * It carries every column the exporter writes, including Quantity Formula and
+ * Condition Formula. The old template listed neither, so the two columns that
+ * hold the slot-counting logic were invisible to anyone starting from it —
+ * they would fill in Quantity, get a flat number, and have no way to express
+ * "one per remote" from the spreadsheet at all.
+ */
 export const RULE_TEMPLATE_CSV = [
-  "Rule ID,Name,Result Part,Revision,Category,Quantity,Active,When,Notes",
-  "EX-01,Example rule,PART-ID,,ASSEMBLY_UPGRADE,1,Yes,CHKEXAMPLE is checked,Fires when the checkbox is on",
-  "EX-02,Example OR rule,PART-ID2,,MATERIAL_UPGRADE,1,Yes,(CMBUPS contains 1kVA) OR (CMBUPS contains 2kVA),Groups use OR",
+  "Rule ID,Name,Result Part,Category,Quantity,Active,Revision,Unit,Quantity Formula,Condition Formula,Notes,When",
+  "EX-01,Simple checkbox rule,PART-ID,ASSEMBLY_UPGRADE,1,Yes,,Per Door,,,Fires when the checkbox is on,CHKEXAMPLE is checked",
+  "EX-02,Either-or rule,PART-ID2,MATERIAL_UPGRADE,1,Yes,,Per Door,,,Groups use OR,(CMBUPS contains 1kVA) OR (CMBUPS contains 2kVA)",
+  'EX-03,One per matching radar,PART-ID3,ASSEMBLY_UPGRADE,1,Yes,,Per Radar,"countEquals(group(""CMBRADAR""), ""IXIO Sensor - Long Stalk"")","countEquals(group(""CMBRADAR""), ""IXIO Sensor - Long Stalk"") > 0",Quantity Formula overrides the Quantity column,',
+  'EX-04,One per remote ordered,PART-ID4,MATERIAL_UPGRADE,1,Yes,,Per Remote,"sumWhere(group(""CMBACT""), ""Elsema Remote - 2"", group(""NUMREMOTEQTY""))","sumWhere(group(""CMBACT""), ""Elsema Remote - 2"", group(""NUMREMOTEQTY"")) > 0",Adds up the qty box beside each matching slot,',
 ].join("\r\n");
 
 export interface ImportedRule {
@@ -141,8 +151,11 @@ export function rulesToCsv(rules: ConfiguratorRule[]): string {
       ...RULE_CSV_COLUMNS,
       "Revision",
       "Unit",
-      "Formula",
-      "Count When",
+      // Renamed from "Formula" / "Count When", which gave no clue what they
+      // held. The importer already accepted these longer names as aliases, so
+      // spreadsheets exported before this still import unchanged.
+      "Quantity Formula",
+      "Condition Formula",
       "Notes",
       "When",
     ],

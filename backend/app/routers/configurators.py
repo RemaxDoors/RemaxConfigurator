@@ -229,6 +229,40 @@ def create_configurator(body: ConfiguratorIn):
         raise HTTPException(status_code=502, detail=f"Create failed: {exc}")
 
 
+class UpdateDefaultIn(BaseModel):
+    """One default's new value. doorModel None targets the conditional/manual
+    row for that control, matched on IS NULL."""
+    doorModel: str | None = None
+    controlName: str
+    value: str
+    changedBy: str | None = None
+
+
+@router.put("/configurators/{configurator_id}/defaults")
+def update_default(configurator_id: str, body: UpdateDefaultIn):
+    """Change a single default's value.
+
+    Separate from /defaults/replace on purpose. That endpoint deletes the whole
+    set and re-inserts four columns, which drops Priority, ValueFormula,
+    IsManual and ParentPartID and cannot delete a row referenced by
+    uCfgDefaultConditions. Editing one value must not risk any of that.
+    """
+    if not settings.config_db_configured():
+        raise HTTPException(status_code=503, detail="Config DB not configured.")
+    try:
+        return config_write.update_default(
+            configurator_id,
+            body.doorModel,
+            body.controlName,
+            body.value,
+            body.changedBy or "admin",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=502, detail=f"Save failed: {exc}")
+
+
 @router.post("/configurators/{configurator_id}/defaults/replace")
 def replace_defaults(configurator_id: str, body: ReplaceDefaultsIn):
     """Bulk replace a configurator's defaults (DoorModel → ControlName = value)."""

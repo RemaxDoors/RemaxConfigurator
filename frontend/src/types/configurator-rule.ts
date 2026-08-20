@@ -183,3 +183,35 @@ export function describeConditions(conditions: RuleCondition[]): string {
   const parts = groups.map((conds) => conds.map(describeCondition).join(" AND "));
   return parts.length === 1 ? parts[0] : parts.map((p) => `(${p})`).join(" OR ");
 }
+
+/**
+ * What actually decides whether a rule fires: the condition rows AND the
+ * condition formula, which is ANDed on top of them.
+ *
+ * describeConditions() alone is not enough for a list view. A rule whose whole
+ * test lives in a formula — every slot-counting rule does — has no condition
+ * rows, so that function returns "Always". Displaying that next to a rule that
+ * only fires when a floor loop is selected is worse than displaying nothing.
+ */
+export function describeRuleWhen(rule: {
+  conditions: RuleCondition[];
+  conditionFormula?: string | null;
+}): string {
+  const formula = (rule.conditionFormula ?? "").trim();
+  if (rule.conditions.length === 0) return formula || "Always";
+  const rows = describeConditions(rule.conditions);
+  return formula ? `${rows} AND ${formula}` : rows;
+}
+
+/**
+ * The quantity as it will actually be worked out. Quantity holds a fixed
+ * number, but QuantityFormula overrides it when set — so showing the number on
+ * its own reports "1" for a rule that bills one per remote.
+ */
+export function describeRuleQuantity(rule: {
+  quantity?: string | number | null;
+  quantityFormula?: string | null;
+}): string {
+  const formula = (rule.quantityFormula ?? "").trim();
+  return formula || String(rule.quantity ?? "");
+}

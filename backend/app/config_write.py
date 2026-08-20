@@ -238,6 +238,78 @@ def replace_defaults(configurator_id: str, defaults: list[dict], changed_by: str
     return {"deleted": before, "inserted": inserted}
 
 
+def update_default(
+    configurator_id: str,
+    door_model: str | None,
+    control_name: str,
+    value: str,
+    changed_by: str = "admin",
+) -> dict:
+    """Change ONE default's value, leaving every other column alone.
+
+    Deliberately narrow, for the same reason update_layout() is. The bulk path,
+    replace_defaults(), deletes the whole set and re-inserts four columns --
+    which drops Priority, ValueFormula, IsManual and ParentPartID, and cannot
+    delete a row that uCfgDefaultConditions references at all
+    (FK_uCfgDefCond_Default is NO_ACTION). Editing a single value must not go
+    anywhere near that.
+
+    A NULL door model identifies a conditional or manual default. Those are
+    matched on IS NULL rather than equality, so editing one does not silently
+    create a second row.
+    """
+    engine = config_repo.get_config_engine()
+    with engine.begin() as conn:
+        cfg_id = _cfg_id(conn, configurator_id)
+        if cfg_id is None:
+            raise ValueError(f"Configurator '{configurator_id}' not found")
+
+        model_clause = (
+            "DoorModel IS NULL" if door_model is None
+            else "UPPER(DoorModel) = UPPER(:m)"
+        )
+        params = {"c": cfg_id, "cn": control_name}
+        if door_model is not None:
+            params["m"] = door_model
+
+        row = conn.execute(text(
+            f"SELECT DefaultID, DefaultValue, IsManual FROM dbo.uCfgDefaults "
+            f"WHERE CfgID = :c AND UPPER(ControlName) = UPPER(:cn) AND {model_clause}"
+        ), params).fetchone()
+        if row is None:
+            raise ValueError(
+                f"No default for '{control_name}' on "
+                f"{door_model or 'all models'} in this configurator."
+            )
+
+        default_id, old_value, is_manual = row[0], row[1], row[2]
+        if is_manual:
+            # Manual defaults (freight and similar) are never applied
+            # automatically. Giving one a value here would look like it had
+            # taken effect when nothing reads it.
+            raise ValueError(
+                f"'{control_name}' is a manual default and is not pre-filled "
+                "automatically, so setting a value here would have no effect."
+            )
+
+        conn.execute(text(
+            "UPDATE dbo.uCfgDefaults SET DefaultValue = :v WHERE DefaultID = :id"
+        ), {"v": value, "id": default_id})
+
+    _log_change(
+        engine, "uCfgDefaults", configurator_id, "UPDATE",
+        {"controlName": control_name, "doorModel": door_model, "value": old_value},
+        {"controlName": control_name, "doorModel": door_model, "value": value},
+        changed_by,
+    )
+    return {
+        "controlName": control_name,
+        "doorModel": door_model,
+        "from": old_value,
+        "to": value,
+    }
+
+
 def create_configurator(
     part_id: str,
     name: str,

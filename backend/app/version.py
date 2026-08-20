@@ -8,4 +8,4 @@ commit SHA, but the SHA is not visible from the app itself.
 Keep it in step with frontend/package.json.
 """
 
-__version__ = "0.1.2"
+__version__ = "0.2.0"

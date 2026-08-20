@@ -6,7 +6,9 @@ import {
   AlertTriangle,
   Download,
   FileDown,
+  HelpCircle,
   Info,
+  LayoutGrid,
   Loader2,
   Pencil,
   Plus,
@@ -37,6 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ParameterEditorDialog } from "@/components/admin/parameter-editor-dialog";
+import { DefaultEditorDialog } from "@/components/admin/default-editor-dialog";
 import { RuleEditorDialog } from "@/components/admin/rule-editor-dialog";
 import {
   ImportReportDialog,
@@ -74,17 +77,22 @@ import {
 import {
   PARAMETER_KIND_LABELS,
   type Configurator,
+  type ConfiguratorDefault,
   type ConfiguratorParameter,
 } from "@/types/configurator";
 import {
   RULE_CATEGORY_LABELS,
-  describeConditions,
+  describeRuleQuantity,
+  describeRuleWhen,
   type ConfiguratorRule,
   type RuleCategory,
 } from "@/types/configurator-rule";
 
 const SELECT_CLASS =
   "flex h-10 w-72 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** Tabs the ?tab= deep link may open. Anything else is ignored. */
+const TAB_IDS = ["overview", "parameters", "rules", "defaults"];
 
 function categoryVariant(
   category: RuleCategory
@@ -112,6 +120,8 @@ export default function ConfiguratorSetupPage() {
   const [source, setSource] = React.useState<"unavailable" | "api">("unavailable");
   const [configError, setConfigError] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState("overview");
+  const [editingDefault, setEditingDefault] =
+    React.useState<ConfiguratorDefault | null>(null);
   const [saveNotice, setSaveNotice] = React.useState<{
     kind: "ok" | "error";
     text: string;
@@ -143,11 +153,25 @@ export default function ConfiguratorSetupPage() {
         if (!data.configurators?.length) return;
         setConfigurators(data.configurators);
         setRules(data.rules ?? []);
-        setConfiguratorId((prev) =>
-          data.configurators.some((c) => c.id === prev)
+        // Honour ?id= and ?tab= so the catalog can open a specific
+        // configurator on a specific tab. Read straight off the URL rather
+        // than useSearchParams(), which would force this client page behind a
+        // Suspense boundary for no benefit.
+        const q =
+          typeof window === "undefined"
+            ? new URLSearchParams()
+            : new URLSearchParams(window.location.search);
+        const wanted = q.get("id");
+        const wantedTab = q.get("tab");
+        if (wantedTab && TAB_IDS.includes(wantedTab)) setTab(wantedTab);
+        setConfiguratorId((prev) => {
+          if (wanted && data.configurators.some((c) => c.id === wanted)) {
+            return wanted;
+          }
+          return data.configurators.some((c) => c.id === prev)
             ? prev
-            : data.configurators[0].id
-        );
+            : data.configurators[0].id;
+        });
       })
       .catch(() => active && setConfigError("Could not reach the config API."));
     return () => {
@@ -679,11 +703,19 @@ export default function ConfiguratorSetupPage() {
         {selected?.doorTypeFilter && (
           <Badge variant="secondary">Door type: {selected.doorTypeFilter}</Badge>
         )}
-        <Button
-          variant="outline"
-          className="ml-auto"
-          onClick={() => setCreateOpen(true)}
-        >
+        <Button variant="ghost" className="ml-auto" asChild>
+          <Link href="/configurator-setup/help">
+            <HelpCircle className="h-4 w-4" />
+            Formula help
+          </Link>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link href="/configurators">
+            <LayoutGrid className="h-4 w-4" />
+            Catalog
+          </Link>
+        </Button>
+        <Button variant="outline" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
           New configurator
         </Button>
@@ -930,8 +962,13 @@ export default function ConfiguratorSetupPage() {
                     visibleRules.map((rule) => (
                       <TableRow key={rule.id}>
                         <TableCell className="font-medium">{rule.name}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {describeConditions(rule.conditions)}
+                        <TableCell className="max-w-[22rem] text-muted-foreground">
+                          <span
+                            className="block truncate"
+                            title={describeRuleWhen(rule)}
+                          >
+                            {describeRuleWhen(rule)}
+                          </span>
                         </TableCell>
                         <TableCell className="font-mono text-xs">
                           {rule.resultPartId}
@@ -941,8 +978,13 @@ export default function ConfiguratorSetupPage() {
                             {RULE_CATEGORY_LABELS[rule.category]}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {rule.quantity}
+                        <TableCell className="max-w-[16rem] text-right tabular-nums">
+                          <span
+                            className="block truncate"
+                            title={describeRuleQuantity(rule)}
+                          >
+                            {describeRuleQuantity(rule)}
+                          </span>
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex justify-center">
@@ -1044,13 +1086,14 @@ export default function ConfiguratorSetupPage() {
                     <TableHead>Door Model</TableHead>
                     <TableHead>Parameter</TableHead>
                     <TableHead>Default Value</TableHead>
+                    <TableHead className="w-[1%] text-right">Edit</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {shownDefaults.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={3}
+                        colSpan={4}
                         className="py-10 text-center text-muted-foreground"
                       >
                         No defaults for this configurator. Import a CSV to add them.
@@ -1073,6 +1116,16 @@ export default function ConfiguratorSetupPage() {
                           }
                         >
                           {d.value || "— (cleared)"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setEditingDefault(d)}
+                            aria-label={`Edit default for ${d.controlName}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))
@@ -1101,6 +1154,38 @@ export default function ConfiguratorSetupPage() {
         controlNames={controlNames}
         parameters={parameters}
         onSave={saveRule}
+      />
+
+      <DefaultEditorDialog
+        open={editingDefault !== null}
+        onOpenChange={(o) => !o && setEditingDefault(null)}
+        configuratorId={configuratorId}
+        value={editingDefault}
+        parameters={parameters}
+        onSaved={(updated) => {
+          // Patch in place rather than refetching: the row is identified by
+          // door model + control name, and a null door model must match a null,
+          // not the string "null".
+          setConfigurators((prev) =>
+            prev.map((c) =>
+              c.id !== configuratorId
+                ? c
+                : {
+                    ...c,
+                    defaults: (c.defaults ?? []).map((d) =>
+                      d.controlName === updated.controlName &&
+                      d.doorModel === updated.doorModel
+                        ? updated
+                        : d
+                    ),
+                  }
+            )
+          );
+          setSaveNotice({
+            kind: "ok",
+            text: `Default for ${updated.controlName} saved.`,
+          });
+        }}
       />
 
       <ImportReportDialog

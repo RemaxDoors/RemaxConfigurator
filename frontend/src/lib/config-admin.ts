@@ -107,6 +107,39 @@ export async function replaceDefaultsInDb(
   return body as ReplaceDefaultsResult;
 }
 
+/**
+ * Change ONE default's value.
+ *
+ * Not replaceDefaultsInDb with the row swapped in: that deletes the whole set
+ * and re-inserts four columns, which loses Priority / ValueFormula / IsManual /
+ * ParentPartID and cannot delete a row that a default condition references.
+ * `doorModel: null` targets the conditional/manual row for that control.
+ */
+export async function updateDefaultInDb(
+  configuratorId: string,
+  doorModel: string | null,
+  controlName: string,
+  value: string,
+  changedBy?: string
+): Promise<{ from: string; to: string }> {
+  const res = await fetch("/api/config/defaults", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      configuratorId,
+      doorModel,
+      controlName,
+      value,
+      changedBy,
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error || body.detail || `Save failed (${res.status})`);
+  }
+  return body as { from: string; to: string };
+}
+
 /** Bulk replace a configurator's parameter set (CSV import) via the API. */
 export async function replaceParametersInDb(
   configuratorId: string,
