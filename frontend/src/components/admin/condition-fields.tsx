@@ -14,6 +14,22 @@ export const SELECT_CLASS =
 export const LIST_OPERATORS = new Set(["in", "not_in"]);
 /** Operators that take no value at all. */
 export const NO_VALUE_OPERATORS = new Set(["is_checked", "not_checked"]);
+/**
+ * Operators that match part of a value rather than the whole of it —
+ * validation_engine.py does `compare in value` / `value.startswith(compare)`,
+ * case-insensitively.
+ *
+ * These must NOT be edited with a dropdown of exact option values. The whole
+ * point of "contains" is to write a fragment shared by several options, such as
+ * "Induction Loop - ", which matches no single option exactly. Offering the
+ * option list as the only choice made the operator unusable: every pick wrote a
+ * full value, turning "contains" into an equality test.
+ */
+export const SUBSTRING_OPERATORS = new Set([
+  "contains",
+  "not_contains",
+  "starts_with",
+]);
 
 /** Pick a parameter by control name — no typing, so no typos. */
 export function ControlSelect({
@@ -69,6 +85,7 @@ export function ValueEditor({
 }) {
   const options = (parameter?.options ?? []).filter((o) => o.value !== "");
   const isList = LIST_OPERATORS.has(operator);
+  const listId = React.useId();
 
   const selected = React.useMemo(
     () =>
@@ -139,6 +156,39 @@ export function ValueEditor({
             onAdd={(v) => onChange([...selected, v].join(", "))}
           />
         )}
+      </div>
+    );
+  }
+
+  // --- fragment match: free text, with the options offered as suggestions ---
+  // A datalist keeps both halves: type any fragment, or pick a whole option
+  // value from the list and trim it down.
+  if (SUBSTRING_OPERATORS.has(operator)) {
+    return (
+      <div className="w-full space-y-1">
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          list={options.length > 0 ? listId : undefined}
+          placeholder={
+            operator === "starts_with"
+              ? "text the value starts with"
+              : "text the value contains"
+          }
+        />
+        {options.length > 0 && (
+          <datalist id={listId}>
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label || o.value}
+              </option>
+            ))}
+          </datalist>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Matches part of the value, ignoring case
+          {options.length > 0 && " — start typing to see this field's options"}.
+        </p>
       </div>
     );
   }

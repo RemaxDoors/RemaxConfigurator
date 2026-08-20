@@ -59,6 +59,34 @@ const SELECT_CLASS =
 
 const OPERATORS = Object.keys(OPERATOR_LABELS) as ConditionOperator[];
 
+/**
+ * Banner that splits the dialog into its two halves.
+ *
+ * Every rule answers two separate questions — *when* does it fire, and *what*
+ * does it add — but the controls for both used to run together down one column.
+ * The slot counter in particular reads as though it might belong to the part
+ * ID, the revision or the quantity, when it is really part of the condition.
+ */
+function StepHeading({
+  step,
+  title,
+  hint,
+}: {
+  step: number;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <div className="flex items-baseline gap-2 border-b pb-1.5 pt-2">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+        {step}
+      </span>
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+  );
+}
+
 interface RuleEditorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -292,6 +320,12 @@ export function RuleEditorDialog({
             </div>
           </div>
 
+          <StepHeading
+            step={1}
+            title="When this rule fires"
+            hint="the test — nothing here changes what gets added"
+          />
+
           {/* Conditions — AND within a group, OR between groups (like an if) */}
           <div className="space-y-2">
             <Label>
@@ -412,6 +446,13 @@ export function RuleEditorDialog({
                 …and count across numbered fields
               </label>
               <p className="text-xs text-muted-foreground">
+                Still part of <span className="font-medium">when the rule fires</span>{" "}
+                — an extra test, ANDed on top of the groups above. It does not
+                set the quantity; use{" "}
+                <span className="font-medium">Quantity per assembly</span> below
+                for that.
+              </p>
+              <p className="text-xs text-muted-foreground">
                 For rules that depend on how many activation or radar slots are
                 set — e.g. only charge when a floor loop is selected.
               </p>
@@ -444,6 +485,12 @@ export function RuleEditorDialog({
                 ))}
             </div>
           </div>
+
+          <StepHeading
+            step={2}
+            title="What this rule adds"
+            hint="the part, its revision, and how many"
+          />
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
