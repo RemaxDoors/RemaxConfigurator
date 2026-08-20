@@ -1,0 +1,40 @@
+﻿Control Name,Label,Type,Section,Options
+CHKIMPACTBAND,Impact Bands?,Checkbox,SIGNAGE,
+CHKMK5REPLACE,MK5 Premier?,Checkbox,REPLACEMENT PANEL OPTIONS,
+CHKMTI90REPLACE,MTI 90 Door?,Checkbox,REPLACEMENT PANEL OPTIONS,
+CHKREPLACEPANEL,Replacement Panels?,Checkbox,REPLACEMENT PANEL OPTIONS,
+CHKCRATEREQUIRED,Crate Required?,Checkbox,INSTALLATION,
+CHKPWDCTSHS,Support Frame (Remax Supply),Checkbox,POWDERCOATING,
+CHKVISIONBAND,Vision Band?,Checkbox,VISION BAND DETAILS,
+CHKSSSF,Self Support Frame?,Checkbox,OVERVIEW,
+CHKPWDCTDHWARE,Door Hardware,Checkbox,POWDERCOATING,
+CHKINSTALLATION,Install Configured,Checkbox,INSTALLATION,
+CHKMTI105REPLACE,MTI 105 Door?,Checkbox,REPLACEMENT PANEL OPTIONS,
+CHKREPLACEA,Replace Left(A) Panel,Checkbox,REPLACEMENT PANEL OPTIONS,
+CHKREPLACEB,Replace Right(B) Panel,Checkbox,REPLACEMENT PANEL OPTIONS,
+CHKMK6REPLACE,MK6 Premier?,Checkbox,REPLACEMENT PANEL OPTIONS,
+CMBFREIGHTRATE,State / Freight Rate,Dropdown,Freight,0.9=VIC|1.9=TAS|0.9002=NSW|0.9001=SA|1.5=QLD|1.9=WA|1.9001=NT
+NUMFREIGHTALLOWANCE,Freight Allowance ($),Number,Freight,
+CMBSPRINGTYPE,Spring Material,Dropdown,OVERVIEW,|Stainless Steel|Standard
+CMBHOLDOPEN,Hold Open,Dropdown,OVERVIEW,|Single Store Side|Single BOH Side|Double
+CMBSINGLEPAIR,Single/Pair,Dropdown,OVERVIEW,|Single|Pair
+CMBJOBTYPE,Job Type,Dropdown,Freight,|Delivery|Install
+CMBDOORHANDLING,Door Handing,Dropdown,OVERVIEW,|Left (A)|Right (B)
+CMBDOORMODEL,Door Model,Dropdown,OVERVIEW,|2400=2400 Series|3000=3000 Series (Service Only)|3500=3500 Series
+CMBSTATE,State (CNC),Dropdown,OVERVIEW,NSW=NSW CNC|VIC=VIC CNC
+CMBSPECIFICATION,Specification,Dropdown,OVERVIEW,|Liquorland Store|Liquorland W/House|Coles|Spotlight|Officeworks|Richies|Harris Scarfe|Rebel Sport|Woolworths|IGA|Reject Shop|Not Specified
+CMBHINGETYPE,Hinge Type,Dropdown,OVERVIEW,|Standard=Standard Hinge|Quad Action
+CMBMOUNTINGTYPE,Mounting Type,Dropdown,INSTALLATION,"|Hinge Plate|Gantry Frame=Gantry Frame (needs to be built)|Gantry SP=Gantry Frame, Single Post (needs to be built)|Existing Gantry=Existing Gantry (no extra frame required)|Existing Hinge Plate|Steel Support Frame=Steel Support Frame, 75x50mm RHS"
+CMBWALLCONSTRUCTION,Wall Construction,Dropdown,INSTALLATION,|Timber Frame|Metal Stud|Coolroom Panel|Blockwork|Precast|Steel Frame|Pressed Metal Frame|ICP with Timber|Pressed Metal w/Timber|S/S Capping w/Timber
+CMBNUMLEVELS,PVC Levels,Dropdown,PVC PANEL DETAILS,1|2|3=3 (With Vision Band)
+CMBTOPPVCCOLOUR,Top PVC Colour,Dropdown,PVC PANEL DETAILS,|Clear (Duraflex)|Blue|Black|Grey|Opaque (Texaflex Clear)|Red
+CMBMIDPVCCOLOUR,Mid PVC Colour,Dropdown,PVC PANEL DETAILS,|Clear (Duraflex)|Blue|Black|Grey|Opaque (Texaflex Clear)|Red
+CMBBOTTOMPVCCOLOUR,Bottom PVC Colour,Dropdown,PVC PANEL DETAILS,|Clear (Duraflex)|Blue|Black|Grey|Opaque (Texaflex Clear)|Red
+CMBFULLPVCCOLOUR,Full PVC Colour (historic),Dropdown,PVC PANEL DETAILS,|Clear (Duraflex)|Blue|Black|Grey|Opaque (Texaflex Clear)|Red
+NUMIMPACTBANDQUANTITY,Impact Band Quantity,Dropdown,IMPACT BANDS,1|2
+CMBIMPACTBANDCOLOUR,Impact Band Colour (Store),Dropdown,IMPACT BANDS,|Clear (Duraflex)|Blue|Black|Grey|Opaque (Texaflex Clear)|Red
+CMBIMPACTBANDCOLOURBOH,Impact Band Colour (BOH),Dropdown,IMPACT BANDS,|Clear (Duraflex)|Blue|Black|Grey|Opaque (Texaflex Clear)|Red
+CMBIMPACTBANDCOLOUR2,Impact Band 2 Colour (Store),Dropdown,IMPACT BANDS,|Clear (Duraflex)|Blue|Black|Grey|Opaque (Texaflex Clear)|Red
+CMBIMPACTBANDCOLOUR2BOH,Impact Band 2 Colour (BOH),Dropdown,IMPACT BANDS,|Clear (Duraflex)|Blue|Black|Grey|Opaque (Texaflex Clear)|Red
+CMBSTORESIDESIGNS,Store Side Sign,Dropdown,SIGNAGE,"|LBL-24TRUSS=2400 Series, STAFF ONLY|LBL-24IKEA=IKEA - Keep Clear - Swinging Door|LBL-24FCTMO=Coles/Liquorland 2400 Series Dock Side, ASPWC|LBL-24FCAS=Coles/Liquorland 2400 Store, Team Members Only Series|LBL-24FCAS=First Choice 2400, Approach Slowly with Caution|LBL-24FCTMO=First Choice 2400, Team Members Only|LBL-24KMART-ASPWC=Kmart 2400 Series, ASPWC|LBL-24KMART-TMO=Kmart 2400, Team Members Only|LBL-24SPOTDS=Spotlight/Anaconda 2400 Dock Side, ASPWC|LBL-24SPOTSS=Spotlight/Anaconda 2400 Store Side, TMO|LBL-24TARDS=Target Dock Side, Open With Care|LBL-24TARSS=Target Store Side, Team Member Access"
+CMBDOCKSIDESIGNS,Dock Side Sign,Dropdown,SIGNAGE,"|LBL-24TRUSS=2400 Series, STAFF ONLY|LBL-24IKEA=IKEA - Keep Clear - Swinging Door|LBL-24FCTMO=Coles/Liquorland 2400 Series Dock Side, ASPWC|LBL-24FCAS=Coles/Liquorland 2400 Store, Team Members Only Series|LBL-24FCAS=First Choice 2400, Approach Slowly with Caution|LBL-24FCTMO=First Choice 2400, Team Members Only|LBL-24KMART-ASPWC=Kmart 2400 Series, ASPWC|LBL-24KMART-TMO=Kmart 2400, Team Members Only|LBL-24SPOTDS=Spotlight/Anaconda 2400 Dock Side, ASPWC|LBL-24SPOTSS=Spotlight/Anaconda 2400 Store Side, TMO|LBL-24TARDS=Target Dock Side, Open With Care|LBL-24TARSS=Target Store Side, Team Member Access"
