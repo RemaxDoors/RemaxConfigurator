@@ -94,6 +94,51 @@ const SELECT_CLASS =
 /** Tabs the ?tab= deep link may open. Anything else is ignored. */
 const TAB_IDS = ["overview", "parameters", "rules", "defaults"];
 
+/**
+ * Next free rule code, in the style the configurator already uses.
+ *
+ * uCfgRules.RuleCode is NVARCHAR(30) and these codes are how a rule is referred
+ * to in the M1 workbooks and in conversation ("RRD-13 is wrong"), so they have
+ * to be short and readable. Follows whatever prefix the existing rules use and
+ * takes the next number; falls back to the configurator id's first segment for
+ * a configurator with no rules yet.
+ */
+function nextRuleCode(
+  configuratorId: string,
+  existing: ConfiguratorRule[]
+): string {
+  const counts = new Map<string, number>();
+  let highest = 0;
+  for (const r of existing) {
+    const m = /^([A-Za-z]+)-(\d+)$/.exec(r.id.trim());
+    if (!m) continue;
+    counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
+    highest = Math.max(highest, Number(m[2]));
+  }
+  let prefix = "";
+  let best = 0;
+  counts.forEach((n, p) => {
+    if (n > best) {
+      best = n;
+      prefix = p;
+    }
+  });
+  if (!prefix) {
+    prefix =
+      (configuratorId.split("-")[0] || "RULE").toUpperCase().slice(0, 6) ||
+      "RULE";
+  }
+  const taken = new Set(existing.map((r) => r.id.toUpperCase()));
+  let n = highest + 1;
+  // Codes can be edited by hand and imported from CSV, so the highest number
+  // is a starting guess, not a guarantee that the next one is free.
+  for (;;) {
+    const code = `${prefix}-${String(n).padStart(2, "0")}`;
+    if (!taken.has(code.toUpperCase())) return code.slice(0, 30);
+    n += 1;
+  }
+}
+
 function categoryVariant(
   category: RuleCategory
 ): "default" | "secondary" | "outline" {
@@ -319,10 +364,24 @@ export default function ConfiguratorSetupPage() {
       try {
         const mine = next.filter((r) => r.configuratorId === configuratorId);
         const res = await replaceRulesInDb(configuratorId, mine);
-        setRulesStatus({
-          kind: "ok",
-          text: `Saved ${res.inserted} rule${res.inserted === 1 ? "" : "s"} to the database.`,
-        });
+        // The API saves each rule in its own savepoint and reports the ones it
+        // could not save inside a 200. Reporting only `inserted` turned a
+        // rejected rule into a success message and a silently missing rule.
+        const skipped = res.skipped ?? [];
+        if (skipped.length > 0) {
+          setRulesStatus({
+            kind: "error",
+            text:
+              `Saved ${res.inserted}, but the database rejected ` +
+              `${skipped.length}: ` +
+              skipped.map((s) => `${s.id} (${s.reason})`).join("; "),
+          });
+        } else {
+          setRulesStatus({
+            kind: "ok",
+            text: `Saved ${res.inserted} rule${res.inserted === 1 ? "" : "s"} to the database.`,
+          });
+        }
       } catch (err) {
         setRulesStatus({
           kind: "error",
@@ -342,12 +401,16 @@ export default function ConfiguratorSetupPage() {
     });
   };
 
-  const saveRule = (rule: ConfiguratorRule) =>
+  const saveRule = (rule: ConfiguratorRule) => {
+    const withCode = rule.id
+      ? rule
+      : { ...rule, id: nextRuleCode(configuratorId, visibleRules) };
     applyRules((prev) =>
-      prev.some((r) => r.id === rule.id)
-        ? prev.map((r) => (r.id === rule.id ? rule : r))
-        : [...prev, rule]
+      prev.some((r) => r.id === withCode.id)
+        ? prev.map((r) => (r.id === withCode.id ? withCode : r))
+        : [...prev, withCode]
     );
+  };
 
   const deleteRule = (id: string) =>
     applyRules((prev) => prev.filter((r) => r.id !== id));

@@ -266,11 +266,12 @@ export function RuleEditorDialog({
 
   const handleSave = () => {
     if (!canSave) return;
-    onSave({
-      ...draft,
-      id: draft.id || (crypto.randomUUID?.() ?? `r${Date.now()}`),
-      configuratorId,
-    });
+    // A new rule is saved with an empty id and the page assigns the code.
+    // It used to mint a UUID here, which is 36 characters against a
+    // uCfgRules.RuleCode of NVARCHAR(30): every insert failed on truncation,
+    // the API skipped that one rule, and the save reported success. Nothing
+    // generated here can know what codes are already taken anyway.
+    onSave({ ...draft, id: draft.id, configuratorId });
     onOpenChange(false);
   };
 

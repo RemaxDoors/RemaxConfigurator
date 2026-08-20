@@ -71,12 +71,24 @@ export interface ReplaceDefaultsResult {
   inserted: number;
 }
 
+export interface ReplaceRulesResult extends ReplaceDefaultsResult {
+  /**
+   * Rules the API could not save, with the reason.
+   *
+   * replace_rules() saves each rule in its own savepoint so one bad row cannot
+   * roll back a whole import — the cost is that a failure is reported in the
+   * body of a 200 rather than thrown. This field was missing from the type, so
+   * callers reported "Saved N rules" and said nothing about the ones dropped.
+   */
+  skipped?: { id: string; reason: string }[];
+}
+
 /** Save a configurator's rule set to the config DB (admin Save / CSV import). */
 export async function replaceRulesInDb(
   configuratorId: string,
   rules: ConfiguratorRule[],
   changedBy?: string
-): Promise<ReplaceDefaultsResult> {
+): Promise<ReplaceRulesResult> {
   const res = await fetch("/api/config/rules/replace", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -86,7 +98,7 @@ export async function replaceRulesInDb(
   if (!res.ok) {
     throw new Error(body.error || body.detail || `Save failed (${res.status})`);
   }
-  return body as ReplaceDefaultsResult;
+  return body as ReplaceRulesResult;
 }
 
 /** Bulk replace a configurator's defaults (CSV import) via the API. */
