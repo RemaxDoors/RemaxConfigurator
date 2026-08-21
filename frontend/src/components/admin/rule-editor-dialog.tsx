@@ -279,7 +279,9 @@ export function RuleEditorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{rule ? "Edit rule" : "Add rule"}</DialogTitle>
+          {/* A copy arrives as a rule with a blank id, so keying off `rule`
+              alone would title it "Edit rule" while creating a new one. */}
+          <DialogTitle>{rule?.id ? "Edit rule" : "Add rule"}</DialogTitle>
           <DialogDescription>
             Define when a part is added to the configuration and whether it&apos;s
             an upgrade.

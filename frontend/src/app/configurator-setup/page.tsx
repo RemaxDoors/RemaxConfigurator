@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
+  Check,
   Copy,
   Download,
   FileDown,
@@ -62,6 +63,7 @@ import {
   fetchParameterUsage,
   type ParameterUsage,
   replaceParametersInDb,
+  deleteDefaultFromDb,
   replaceDefaultsInDb,
   replaceRulesInDb,
   createConfigurator,
@@ -249,6 +251,9 @@ export default function ConfiguratorSetupPage() {
   const [paramQuery, setParamQuery] = React.useState("");
   const [ruleQuery, setRuleQuery] = React.useState("");
   const [defaultQuery, setDefaultQuery] = React.useState("");
+  // Two-step delete on a defaults row: the first click arms it, the second
+  // does it. Cheaper than a dialog for a row that is one value.
+  const [armedDefault, setArmedDefault] = React.useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<string | null>(null);
   const [deleteUsage, setDeleteUsage] = React.useState<ParameterUsage | null>(null);
   const [deleteBusy, setDeleteBusy] = React.useState(false);
@@ -571,6 +576,45 @@ export default function ConfiguratorSetupPage() {
       setDeleteError(err instanceof Error ? err.message : "Delete failed.");
     } finally {
       setDeleteBusy(false);
+    }
+  };
+
+  /** Key for a default row. A null door model must not become "null". */
+  const defaultKey = (d: ConfiguratorDefault) =>
+    `${d.doorModel ?? ""}|${d.controlName}`;
+
+  const removeDefault = async (d: ConfiguratorDefault) => {
+    try {
+      if (source === "api") {
+        await deleteDefaultFromDb(configuratorId, d.doorModel, d.controlName);
+      }
+      setConfigurators((prev) =>
+        prev.map((c) =>
+          c.id !== configuratorId
+            ? c
+            : {
+                ...c,
+                defaults: (c.defaults ?? []).filter(
+                  (x) =>
+                    !(
+                      x.controlName === d.controlName &&
+                      (x.doorModel ?? null) === (d.doorModel ?? null)
+                    )
+                ),
+              }
+        )
+      );
+      setSaveNotice({
+        kind: "ok",
+        text: `Deleted the default for ${d.controlName} on ${d.doorModel ?? "all models"}.`,
+      });
+    } catch (err) {
+      setSaveNotice({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Delete failed.",
+      });
+    } finally {
+      setArmedDefault(null);
     }
   };
 
@@ -1339,6 +1383,26 @@ export default function ConfiguratorSetupPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              onClick={() => {
+                                // A blank id is what marks this as new: the
+                                // page assigns the next free code on save, so
+                                // the copy cannot land on the original's code
+                                // and overwrite it through replace_rules().
+                                setEditingRule({
+                                  ...structuredClone(rule),
+                                  id: "",
+                                  name: `${rule.name} (copy)`,
+                                });
+                                setRuleEditorOpen(true);
+                              }}
+                              aria-label={`Copy rule ${rule.id}`}
+                              title="Copy this rule"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="text-destructive hover:text-destructive"
                               onClick={() => deleteRule(rule.id)}
                               aria-label="Delete rule"
@@ -1464,6 +1528,36 @@ export default function ConfiguratorSetupPage() {
                             aria-label={`Edit default for ${d.controlName}`}
                           >
                             <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() =>
+                              armedDefault === defaultKey(d)
+                                ? removeDefault(d)
+                                : setArmedDefault(defaultKey(d))
+                            }
+                            onBlur={() =>
+                              armedDefault === defaultKey(d) &&
+                              setArmedDefault(null)
+                            }
+                            aria-label={
+                              armedDefault === defaultKey(d)
+                                ? `Confirm delete of the default for ${d.controlName}`
+                                : `Delete the default for ${d.controlName}`
+                            }
+                            title={
+                              armedDefault === defaultKey(d)
+                                ? "Click again to delete"
+                                : "Delete this default"
+                            }
+                          >
+                            {armedDefault === defaultKey(d) ? (
+                              <Check className="h-4 w-4" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
                           </Button>
                         </TableCell>
                       </TableRow>

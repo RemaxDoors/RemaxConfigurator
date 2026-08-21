@@ -226,10 +226,28 @@ def replace_defaults(configurator_id: str, defaults: list[dict], changed_by: str
         cfg_id = _cfg_id(conn, configurator_id)
         if cfg_id is None:
             raise ValueError(f"Configurator '{configurator_id}' not found")
+        # Replace ONLY the plain per-model rows.
+        #
+        # Deleting everything used to be right, and stopped being right the
+        # moment conditional and specification defaults existed: those carry
+        # rows in uCfgDefaultConditions, FK_uCfgDefCond_Default is NO_ACTION,
+        # so the delete now fails outright — and if it did succeed it would
+        # throw away a specification's whole configuration because none of it
+        # fits the three columns a CSV carries.
+        keep = (
+            "AND SpecName IS NULL "
+            if config_repo.column_exists(conn, "uCfgDefaults", "SpecName")
+            else ""
+        )
+        scope = (
+            "WHERE CfgID = :c " + keep +
+            "AND NOT EXISTS (SELECT 1 FROM dbo.uCfgDefaultConditions dc "
+            "                WHERE dc.DefaultID = dbo.uCfgDefaults.DefaultID)"
+        )
         before = conn.execute(
-            text("SELECT COUNT(*) FROM dbo.uCfgDefaults WHERE CfgID=:c"), {"c": cfg_id}
+            text(f"SELECT COUNT(*) FROM dbo.uCfgDefaults {scope}"), {"c": cfg_id}
         ).scalar() or 0
-        conn.execute(text("DELETE FROM dbo.uCfgDefaults WHERE CfgID=:c"), {"c": cfg_id})
+        conn.execute(text(f"DELETE FROM dbo.uCfgDefaults {scope}"), {"c": cfg_id})
         inserted = 0
         for d in defaults:
             conn.execute(text(

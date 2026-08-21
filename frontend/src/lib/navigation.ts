@@ -18,7 +18,15 @@ export const PRIMARY_NAV: NavItem[] = [
 
 export const NEW_QUOTE_HREF = "/quote/new";
 export const SETTINGS_HREF = "/settings";
-export const CONFIGURATOR_SETUP_HREF = "/configurator-setup";
+/**
+ * Configurator maintenance starts at the catalog.
+ *
+ * /configurator-setup opens whichever configurator happens to be first and
+ * hides the rest behind a dropdown, so arriving there meant landing on a
+ * configurator nobody asked for. The catalog shows what exists, with counts,
+ * and links into the right tab of the setup screen.
+ */
+export const CONFIGURATOR_SETUP_HREF = "/configurators";
 
 /** Secondary links surfaced in the mobile menu (and the settings page). */
 export const SECONDARY_NAV: NavItem[] = [
