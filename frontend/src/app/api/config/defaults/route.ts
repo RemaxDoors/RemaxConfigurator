@@ -37,3 +37,34 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "API unreachable" }, { status: 502 });
   }
 }
+
+/** Delete one default, and any conditions attached to it. */
+export async function DELETE(request: NextRequest) {
+  const base = process.env.API_URL;
+  if (!base) {
+    return NextResponse.json({ error: "API_URL not set" }, { status: 503 });
+  }
+  const body = await request.json();
+  const { configuratorId, ...rest } = body ?? {};
+  if (!configuratorId) {
+    return NextResponse.json(
+      { error: "configuratorId is required" },
+      { status: 400 }
+    );
+  }
+  try {
+    const res = await fetch(
+      `${base}/configurators/${encodeURIComponent(configuratorId)}/defaults`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rest),
+        cache: "no-store",
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    return NextResponse.json(data, { status: res.status });
+  } catch {
+    return NextResponse.json({ error: "API unreachable" }, { status: 502 });
+  }
+}

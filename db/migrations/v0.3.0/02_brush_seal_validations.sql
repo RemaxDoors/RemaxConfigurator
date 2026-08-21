@@ -121,3 +121,12 @@ ORDER BY r.RuleCode;
 PRINT '';
 PRINT 'Each rule should show 3 conditions: the door models it covers, the';
 PRINT 'brush seal values it forbids, and the not-yet-chosen guard.';
+
+-- -- Record this migration ------------------------------------------------
+-- Runs whether the script was applied by the runner or by hand in SSMS.
+-- Skipped silently if 000_migration_log.sql has not been run yet, so an older
+-- database is never blocked by the bookkeeping.
+IF OBJECT_ID('dbo.uCfgMigrations', 'U') IS NOT NULL
+    INSERT INTO dbo.uCfgMigrations (Version, Script, Notes)
+    VALUES (N'v0.3.0', N'02_brush_seal_validations.sql', N'Per-door-model brush seal lists as validation rules');
+GO

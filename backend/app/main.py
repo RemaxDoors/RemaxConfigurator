@@ -5,7 +5,7 @@ from . import settings
 from .routers import configurators, customers, mapping, pricing, status, validation
 from .version import __version__
 
-app = FastAPI(title="Remax Configurator API", version=__version__)
+app = FastAPI(title="Remax ConfigHub API", version=__version__)
 
 app.add_middleware(
     CORSMiddleware,

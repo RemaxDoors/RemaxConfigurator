@@ -231,10 +231,23 @@ def create_configurator(body: ConfiguratorIn):
 
 class UpdateDefaultIn(BaseModel):
     """One default's new value. doorModel None targets the conditional/manual
-    row for that control, matched on IS NULL."""
+    row for that control, matched on IS NULL.
+
+    newDoorModel re-points the row at another model. It is only acted on when
+    `move` is set, so an unchanged form that happens to post the field cannot
+    move a row by accident.
+    """
     doorModel: str | None = None
     controlName: str
     value: str
+    newDoorModel: str | None = None
+    move: bool = False
+    changedBy: str | None = None
+
+
+class DeleteDefaultIn(BaseModel):
+    doorModel: str | None = None
+    controlName: str
     changedBy: str | None = None
 
 
@@ -256,11 +269,40 @@ def update_default(configurator_id: str, body: UpdateDefaultIn):
             body.controlName,
             body.value,
             body.changedBy or "admin",
+            new_door_model=body.newDoorModel,
+            move=body.move,
         )
+    except config_write.DefaultExists as exc:
+        # 409, not 400: the request is well formed, the row it would create is
+        # already there. The UI offers to open that one instead.
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:  # pragma: no cover
         raise HTTPException(status_code=502, detail=f"Save failed: {exc}")
+
+
+@router.delete("/configurators/{configurator_id}/defaults")
+def delete_default(configurator_id: str, body: DeleteDefaultIn):
+    """Delete one default, and any conditions attached to it.
+
+    Not replace_defaults() with the row omitted: that deletes the whole set and
+    re-inserts four columns, losing Priority / ValueFormula / IsManual /
+    ParentPartID from every other row in the process.
+    """
+    if not settings.config_db_configured():
+        raise HTTPException(status_code=503, detail="Config DB not configured.")
+    try:
+        return config_write.delete_default(
+            configurator_id,
+            body.doorModel,
+            body.controlName,
+            body.changedBy or "admin",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=502, detail=f"Delete failed: {exc}")
 
 
 @router.post("/configurators/{configurator_id}/defaults/replace")
@@ -294,12 +336,47 @@ def upsert_parameter(configurator_id: str, param: ParameterIn):
         raise HTTPException(status_code=502, detail=f"Save failed: {exc}")
 
 
-@router.delete("/configurators/{configurator_id}/parameters/{control_name}")
-def delete_parameter(configurator_id: str, control_name: str):
+@router.get("/configurators/{configurator_id}/parameters/{control_name}/usage")
+def parameter_usage(configurator_id: str, control_name: str):
+    """What refers to this parameter: rules, validations and defaults.
+
+    Asked before a delete so the confirmation can name what would go with it.
+    """
     if not settings.config_db_configured():
         raise HTTPException(status_code=503, detail="Config DB not configured.")
     try:
-        return config_write.delete_parameter(configurator_id, control_name)
+        return config_write.parameter_usage(configurator_id, control_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=502, detail=f"Lookup failed: {exc}")
+
+
+@router.delete("/configurators/{configurator_id}/parameters/{control_name}")
+def delete_parameter(
+    configurator_id: str,
+    control_name: str,
+    cascade: bool = Query(default=False),
+):
+    """Delete a parameter. Its defaults always go with it.
+
+    Rules and validations that name the parameter block the delete unless
+    cascade is set: a condition pointing at a control that no longer exists
+    stops matching silently, so removing one by accident is invisible until a
+    quote is wrong. A 409 carries the usage so the caller can offer to remove
+    them too.
+    """
+    if not settings.config_db_configured():
+        raise HTTPException(status_code=503, detail="Config DB not configured.")
+    try:
+        return config_write.delete_parameter(
+            configurator_id, control_name, cascade=cascade
+        )
+    except config_write.ParameterInUse as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": str(exc), "usage": exc.usage},
+        )
     except Exception as exc:  # pragma: no cover
         raise HTTPException(status_code=502, detail=f"Delete failed: {exc}")
 

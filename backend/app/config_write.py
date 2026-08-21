@@ -11,6 +11,18 @@ from sqlalchemy import text
 from . import config_repo, settings
 
 
+class ParameterInUse(Exception):
+    """Raised when a parameter cannot be deleted because rules depend on it.
+
+    Carries the usage so the caller can show what is in the way and offer to
+    remove it, rather than just refusing.
+    """
+
+    def __init__(self, message: str, usage: dict):
+        super().__init__(message)
+        self.usage = usage
+
+
 def _cfg_id(conn, configurator_id: str):
     row = conn.execute(
         text("SELECT CfgID FROM dbo.uCfgConfigurators WHERE PartID = :pid"),
@@ -238,12 +250,44 @@ def replace_defaults(configurator_id: str, defaults: list[dict], changed_by: str
     return {"deleted": before, "inserted": inserted}
 
 
+class DefaultExists(Exception):
+    """Raised when moving a default would collide with one already there.
+
+    UQ_uCfgDefaults is (CfgID, ParentPartID, DoorModel, ControlName) — plus
+    SpecName once that migration has run — so re-pointing a default at another
+    door model can land on a row that already exists. Caught before the write
+    so the message names the clash instead of surfacing "Msg 2627".
+    """
+
+
+def _find_default(conn, cfg_id, door_model, control_name):
+    """One default row, matched the way the unique key does.
+
+    A NULL DoorModel has to be matched with IS NULL: `DoorModel = NULL` is
+    never true, so equality would silently miss every conditional and manual
+    default and look like the row did not exist.
+    """
+    clause = (
+        "DoorModel IS NULL" if door_model is None
+        else "UPPER(DoorModel) = UPPER(:m)"
+    )
+    params = {"c": cfg_id, "cn": control_name}
+    if door_model is not None:
+        params["m"] = door_model
+    return conn.execute(text(
+        f"SELECT DefaultID, DefaultValue, IsManual FROM dbo.uCfgDefaults "
+        f"WHERE CfgID = :c AND UPPER(ControlName) = UPPER(:cn) AND {clause}"
+    ), params).fetchone()
+
+
 def update_default(
     configurator_id: str,
     door_model: str | None,
     control_name: str,
     value: str,
     changed_by: str = "admin",
+    new_door_model: str | None = None,
+    move: bool = False,
 ) -> dict:
     """Change ONE default's value, leaving every other column alone.
 
@@ -264,18 +308,7 @@ def update_default(
         if cfg_id is None:
             raise ValueError(f"Configurator '{configurator_id}' not found")
 
-        model_clause = (
-            "DoorModel IS NULL" if door_model is None
-            else "UPPER(DoorModel) = UPPER(:m)"
-        )
-        params = {"c": cfg_id, "cn": control_name}
-        if door_model is not None:
-            params["m"] = door_model
-
-        row = conn.execute(text(
-            f"SELECT DefaultID, DefaultValue, IsManual FROM dbo.uCfgDefaults "
-            f"WHERE CfgID = :c AND UPPER(ControlName) = UPPER(:cn) AND {model_clause}"
-        ), params).fetchone()
+        row = _find_default(conn, cfg_id, door_model, control_name)
         if row is None:
             raise ValueError(
                 f"No default for '{control_name}' on "
@@ -283,6 +316,20 @@ def update_default(
             )
 
         default_id, old_value, is_manual = row[0], row[1], row[2]
+
+        # Moving to another door model. Checked here rather than left to the
+        # unique constraint so the message says which row is in the way.
+        target = (new_door_model or None) if move else None
+        moving = move and (target or None) != (door_model or None)
+        if moving:
+            clash = _find_default(conn, cfg_id, target, control_name)
+            if clash is not None and clash[0] != default_id:
+                raise DefaultExists(
+                    f"{control_name} already has a default for "
+                    f"{target or 'all models'}. Edit that one instead, or "
+                    "delete it first."
+                )
+
         if is_manual:
             # Manual defaults (freight and similar) are never applied
             # automatically. Giving one a value here would look like it had
@@ -292,9 +339,15 @@ def update_default(
                 "automatically, so setting a value here would have no effect."
             )
 
-        conn.execute(text(
-            "UPDATE dbo.uCfgDefaults SET DefaultValue = :v WHERE DefaultID = :id"
-        ), {"v": value, "id": default_id})
+        if moving:
+            conn.execute(text(
+                "UPDATE dbo.uCfgDefaults SET DefaultValue = :v, DoorModel = :m "
+                "WHERE DefaultID = :id"
+            ), {"v": value, "m": target, "id": default_id})
+        else:
+            conn.execute(text(
+                "UPDATE dbo.uCfgDefaults SET DefaultValue = :v WHERE DefaultID = :id"
+            ), {"v": value, "id": default_id})
 
     _log_change(
         engine, "uCfgDefaults", configurator_id, "UPDATE",
@@ -304,9 +357,56 @@ def update_default(
     )
     return {
         "controlName": control_name,
-        "doorModel": door_model,
+        "doorModel": target if moving else door_model,
+        "movedFrom": door_model if moving else None,
         "from": old_value,
         "to": value,
+    }
+
+
+def delete_default(
+    configurator_id: str,
+    door_model: str | None,
+    control_name: str,
+    changed_by: str = "admin",
+) -> dict:
+    """Delete one default row.
+
+    Its conditions go first: FK_uCfgDefCond_Default is NO_ACTION, so deleting a
+    default that a condition points at fails outright rather than cascading.
+    That is the whole reason replace_defaults() cannot be used to remove a
+    single conditional default.
+    """
+    engine = config_repo.get_config_engine()
+    with engine.begin() as conn:
+        cfg_id = _cfg_id(conn, configurator_id)
+        if cfg_id is None:
+            raise ValueError(f"Configurator '{configurator_id}' not found")
+
+        row = _find_default(conn, cfg_id, door_model, control_name)
+        if row is None:
+            raise ValueError(
+                f"No default for '{control_name}' on "
+                f"{door_model or 'all models'} in this configurator."
+            )
+        default_id, old_value = row[0], row[1]
+
+        conditions = conn.execute(text(
+            "DELETE FROM dbo.uCfgDefaultConditions WHERE DefaultID = :id"
+        ), {"id": default_id}).rowcount or 0
+        conn.execute(text(
+            "DELETE FROM dbo.uCfgDefaults WHERE DefaultID = :id"
+        ), {"id": default_id})
+
+    _log_change(
+        engine, "uCfgDefaults", configurator_id, "DELETE",
+        {"controlName": control_name, "doorModel": door_model, "value": old_value},
+        None, changed_by,
+    )
+    return {
+        "controlName": control_name,
+        "doorModel": door_model,
+        "conditionsRemoved": conditions,
     }
 
 
@@ -477,9 +577,105 @@ def upsert_parameter(configurator_id: str, param: dict, changed_by: str = "admin
     return {"ok": True, "controlName": control}
 
 
-def delete_parameter(configurator_id: str, control_name: str, changed_by: str = "admin") -> dict:
+def parameter_usage(configurator_id: str, control_name: str) -> dict:
+    """Everything that refers to a parameter by name.
+
+    Rule conditions, validation conditions and defaults all store a ControlName
+    string rather than a foreign key to ParamID, so the database will happily
+    delete a parameter and leave them pointing at a control that no longer
+    exists. A condition naming a missing control silently stops matching -- it
+    does not error -- so the loss shows up as a wrong quote, not a message.
+    """
+    engine = config_repo.get_config_engine()
+    with engine.connect() as conn:
+        cfg_id = _cfg_id(conn, configurator_id)
+        if cfg_id is None:
+            raise ValueError("Configurator '%s' not found" % configurator_id)
+
+        rules = conn.execute(text(
+            "SELECT DISTINCT r.RuleCode, r.Name, r.ResultPartID "
+            "FROM dbo.uCfgRules r "
+            "JOIN dbo.uCfgRuleConditions rc ON rc.RuleID = r.RuleID "
+            "WHERE r.CfgID = :c AND UPPER(rc.ControlName) = UPPER(:cn) "
+            "ORDER BY r.RuleCode"
+        ), {"c": cfg_id, "cn": control_name}).fetchall()
+
+        # A rule can also name a control only inside a formula, where it is
+        # text rather than a condition row. LIKE is a blunt test, but missing
+        # one of these is worse than naming one that merely looks similar.
+        formula_rules = []
+        if config_repo.column_exists(conn, "uCfgRules", "ConditionFormula"):
+            formula_rules = conn.execute(text(
+                "SELECT RuleCode, Name, ResultPartID FROM dbo.uCfgRules "
+                "WHERE CfgID = :c AND ("
+                "  UPPER(ISNULL(ConditionFormula,'')) LIKE '%' + UPPER(:cn) + '%'"
+                "  OR UPPER(ISNULL(QuantityFormula,'')) LIKE '%' + UPPER(:cn) + '%'"
+                "  OR UPPER(ISNULL(ResultRevisionFormula,'')) LIKE '%' + UPPER(:cn) + '%')"
+                " ORDER BY RuleCode"
+            ), {"c": cfg_id, "cn": control_name}).fetchall()
+
+        validations = conn.execute(text(
+            "SELECT DISTINCT v.RuleCode, v.Message "
+            "FROM dbo.uCfgValidationRules v "
+            "JOIN dbo.uCfgValidationConditions vc ON vc.ValidationID = v.ValidationID "
+            "WHERE v.CfgID = :c AND ("
+            "  UPPER(vc.ControlName) = UPPER(:cn) OR UPPER(ISNULL(v.TargetField,'')) = UPPER(:cn))"
+            " ORDER BY v.RuleCode"
+        ), {"c": cfg_id, "cn": control_name}).fetchall()
+
+        defaults = conn.execute(text(
+            "SELECT ISNULL(DoorModel, ''), ISNULL(DefaultValue, '') "
+            "FROM dbo.uCfgDefaults WHERE CfgID = :c AND UPPER(ControlName) = UPPER(:cn)"
+        ), {"c": cfg_id, "cn": control_name}).fetchall()
+
+    seen = set(r[0] for r in rules)
+    combined = [
+        {"ruleCode": r[0], "name": r[1], "resultPartId": r[2], "via": "condition"}
+        for r in rules
+    ] + [
+        {"ruleCode": r[0], "name": r[1], "resultPartId": r[2], "via": "formula"}
+        for r in formula_rules if r[0] not in seen
+    ]
+
+    return {
+        "controlName": control_name,
+        "rules": combined,
+        "validations": [{"ruleCode": v[0], "message": v[1]} for v in validations],
+        "defaults": [{"doorModel": d[0], "value": d[1]} for d in defaults],
+    }
+
+
+def delete_parameter(
+    configurator_id: str,
+    control_name: str,
+    changed_by: str = "admin",
+    cascade: bool = False,
+) -> dict:
+    """Delete a parameter, its options, and its defaults.
+
+    Defaults go unconditionally: a default for a control that no longer exists
+    can only ever seed a field that is not on the form.
+
+    Rules and validations are different. They are work someone did, and one may
+    test several controls, so removing the parameter without them leaves a
+    condition naming something that does not exist -- which stops matching
+    quietly rather than erroring. This refuses unless cascade is set, and says
+    exactly what is in the way.
+    """
+    usage = parameter_usage(configurator_id, control_name)
+    blocking = usage["rules"] + usage["validations"]
+    if blocking and not cascade:
+        rules = ", ".join(r["ruleCode"] for r in usage["rules"]) or "none"
+        vals = ", ".join(v["ruleCode"] for v in usage["validations"]) or "none"
+        raise ParameterInUse(
+            "'%s' is used by rules: %s; validations: %s." % (control_name, rules, vals),
+            usage,
+        )
+
     engine = config_repo.get_config_engine()
     old_snap = None
+    removed = {"rules": 0, "validations": 0, "defaults": 0}
+
     with engine.begin() as conn:
         cfg_id = _cfg_id(conn, configurator_id)
         if cfg_id is not None:
@@ -489,6 +685,41 @@ def delete_parameter(configurator_id: str, control_name: str, changed_by: str = 
                     text("SELECT ParamID FROM dbo.uCfgParameters WHERE CfgID=:c AND ControlName=:cn"),
                     {"c": cfg_id, "cn": control_name},
                 ).scalar()
+
+                if cascade:
+                    for code in [r["ruleCode"] for r in usage["rules"]]:
+                        conn.execute(text(
+                            "DELETE rc FROM dbo.uCfgRuleConditions rc "
+                            "JOIN dbo.uCfgRules r ON r.RuleID = rc.RuleID "
+                            "WHERE r.CfgID = :c AND r.RuleCode = :code"
+                        ), {"c": cfg_id, "code": code})
+                        conn.execute(text(
+                            "DELETE FROM dbo.uCfgRules WHERE CfgID = :c AND RuleCode = :code"
+                        ), {"c": cfg_id, "code": code})
+                        removed["rules"] += 1
+                    for code in [v["ruleCode"] for v in usage["validations"]]:
+                        conn.execute(text(
+                            "DELETE vc FROM dbo.uCfgValidationConditions vc "
+                            "JOIN dbo.uCfgValidationRules v ON v.ValidationID = vc.ValidationID "
+                            "WHERE v.CfgID = :c AND v.RuleCode = :code"
+                        ), {"c": cfg_id, "code": code})
+                        conn.execute(text(
+                            "DELETE FROM dbo.uCfgValidationRules WHERE CfgID = :c AND RuleCode = :code"
+                        ), {"c": cfg_id, "code": code})
+                        removed["validations"] += 1
+
+                # Default conditions first: FK_uCfgDefCond_Default is NO_ACTION,
+                # so deleting a default while a condition points at it fails.
+                conn.execute(text(
+                    "DELETE dc FROM dbo.uCfgDefaultConditions dc "
+                    "JOIN dbo.uCfgDefaults d ON d.DefaultID = dc.DefaultID "
+                    "WHERE d.CfgID = :c AND UPPER(d.ControlName) = UPPER(:cn)"
+                ), {"c": cfg_id, "cn": control_name})
+                removed["defaults"] = conn.execute(text(
+                    "DELETE FROM dbo.uCfgDefaults "
+                    "WHERE CfgID = :c AND UPPER(ControlName) = UPPER(:cn)"
+                ), {"c": cfg_id, "cn": control_name}).rowcount or 0
+
                 conn.execute(text("DELETE FROM dbo.uCfgParameterOptions WHERE ParamID=:pid"), {"pid": param_id})
                 conn.execute(text("DELETE FROM dbo.uCfgParameters WHERE ParamID=:pid"), {"pid": param_id})
 
@@ -497,7 +728,7 @@ def delete_parameter(configurator_id: str, control_name: str, changed_by: str = 
             engine, "uCfgParameters", f"{configurator_id}/{control_name}",
             "DELETE", old_snap, None, changed_by,
         )
-    return {"ok": True}
+    return {"ok": True, "removed": removed}
 
 
 # ---------------------------------------------------------------------------

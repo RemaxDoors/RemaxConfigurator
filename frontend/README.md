@@ -1,6 +1,6 @@
-# Remax Configurator — Web (Next.js)
+# Remax ConfigHub — Web (Next.js)
 
-The next-generation frontend for the Remax Configurator, rebuilt in **Next.js + TypeScript**
+The next-generation frontend for Remax ConfigHub, rebuilt in **Next.js + TypeScript**
 with **Tailwind CSS** and **shadcn/ui** components. This replaces the Streamlit proof of
 concept with a scalable, component-based UI.
 

@@ -5,7 +5,7 @@ REM   Web  -> http://localhost:3000   (Next.js, from frontend\)
 REM Double-click this, or run  .\run-all.cmd  from any terminal.
 REM Close either window to stop that server.
 
-echo Starting Remax Configurator...
+echo Starting Remax ConfigHub...
 echo.
 
 if not exist "%~dp0config\Scripts\python.exe" (

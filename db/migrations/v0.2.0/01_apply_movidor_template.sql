@@ -240,3 +240,12 @@ PRINT '';
 PRINT 'The second result set is every ACTIVE rule with no condition and no';
 PRINT 'condition formula - each one applies to every quote. Expect it empty.';
 PRINT 'Restart the API afterwards if it was running before the change.';
+
+-- -- Record this migration ------------------------------------------------
+-- Runs whether the script was applied by the runner or by hand in SSMS.
+-- Skipped silently if 000_migration_log.sql has not been run yet, so an older
+-- database is never blocked by the bookkeeping.
+IF OBJECT_ID('dbo.uCfgMigrations', 'U') IS NOT NULL
+    INSERT INTO dbo.uCfgMigrations (Version, Script, Notes)
+    VALUES (N'v0.2.0', N'01_apply_movidor_template.sql', N'Sections, activation rule formulas, RRD-63/64');
+GO

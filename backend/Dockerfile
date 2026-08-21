@@ -1,4 +1,4 @@
-# Remax Configurator API (FastAPI + pyodbc -> SQL Server)
+# Remax ConfigHub API (FastAPI + pyodbc -> SQL Server)
 #
 # Why this exists: pyodbc needs the Microsoft ODBC driver installed at OS level.
 # Baking it into the image removes the "works on my machine" problem when

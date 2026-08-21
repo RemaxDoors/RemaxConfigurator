@@ -66,6 +66,14 @@ export interface ConfiguratorDefault {
   doorModel: string | null;
   controlName: string;
   value: string;
+  /**
+   * The customer specification this default belongs to, when it came from one.
+   *
+   * Also part of UQ_uCfgDefaults — without it a second specification setting
+   * the same control collides with the first, because a spec default has no
+   * DoorModel to tell them apart.
+   */
+  specName?: string;
 }
 
 export interface Configurator {

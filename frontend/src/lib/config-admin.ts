@@ -21,16 +21,68 @@ export async function saveParameterToDb(
   }
 }
 
-export async function deleteParameterFromDb(
+export interface ParameterUsage {
+  controlName: string;
+  rules: {
+    ruleCode: string;
+    name: string;
+    resultPartId: string | null;
+    /** "condition" = a condition row names it; "formula" = it appears in a formula. */
+    via: string;
+  }[];
+  validations: { ruleCode: string; message: string }[];
+  defaults: { doorModel: string; value: string }[];
+}
+
+/** What refers to a parameter. Asked before offering to delete it. */
+export async function fetchParameterUsage(
   configuratorId: string,
   controlName: string
+): Promise<ParameterUsage> {
+  const query = new URLSearchParams({ configuratorId, controlName });
+  const res = await fetch(`/api/config/parameters?${query}`);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error || body.detail || `Lookup failed (${res.status})`);
+  }
+  return body as ParameterUsage;
+}
+
+/**
+ * Delete a parameter. Its defaults always go with it.
+ *
+ * Without `cascade` the API refuses with a 409 when a rule or validation names
+ * the parameter, and the thrown error carries that usage — a condition
+ * pointing at a control that no longer exists stops matching silently, so this
+ * must never happen by accident.
+ */
+export class ParameterInUseError extends Error {
+  usage: ParameterUsage;
+  constructor(message: string, usage: ParameterUsage) {
+    super(message);
+    this.name = "ParameterInUseError";
+    this.usage = usage;
+  }
+}
+
+export async function deleteParameterFromDb(
+  configuratorId: string,
+  controlName: string,
+  cascade = false
 ): Promise<void> {
   const query = new URLSearchParams({ configuratorId, controlName });
+  if (cascade) query.set("cascade", "true");
   const res = await fetch(`/api/config/parameters?${query}`, {
     method: "DELETE",
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    if (res.status === 409 && body?.detail?.usage) {
+      throw new ParameterInUseError(
+        body.detail.message || "Parameter is in use.",
+        body.detail.usage as ParameterUsage
+      );
+    }
     throw new Error(body.error || body.detail || `Delete failed (${res.status})`);
   }
 }
@@ -132,7 +184,9 @@ export async function updateDefaultInDb(
   doorModel: string | null,
   controlName: string,
   value: string,
-  changedBy?: string
+  changedBy?: string,
+  /** Set to re-point the row at another door model. */
+  move?: { newDoorModel: string | null }
 ): Promise<{ from: string; to: string }> {
   const res = await fetch("/api/config/defaults", {
     method: "PUT",
@@ -143,6 +197,10 @@ export async function updateDefaultInDb(
       controlName,
       value,
       changedBy,
+      newDoorModel: move?.newDoorModel ?? null,
+      // Explicit, so a form that posts the field without meaning to move
+      // cannot re-point a row by accident.
+      move: Boolean(move),
     }),
   });
   const body = await res.json().catch(() => ({}));
@@ -150,6 +208,24 @@ export async function updateDefaultInDb(
     throw new Error(body.error || body.detail || `Save failed (${res.status})`);
   }
   return body as { from: string; to: string };
+}
+
+/** Delete one default. Its conditions go with it. */
+export async function deleteDefaultFromDb(
+  configuratorId: string,
+  doorModel: string | null,
+  controlName: string,
+  changedBy?: string
+): Promise<void> {
+  const res = await fetch("/api/config/defaults", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ configuratorId, doorModel, controlName, changedBy }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || body.detail || `Delete failed (${res.status})`);
+  }
 }
 
 /** Bulk replace a configurator's parameter set (CSV import) via the API. */

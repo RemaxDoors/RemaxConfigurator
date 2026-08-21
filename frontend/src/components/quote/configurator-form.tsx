@@ -440,7 +440,12 @@ export function ConfiguratorForm({
                       </div>
                     </div>
 
-                    <PriceSummary pricing={pricing} loading={pricingLoading} />
+                    <PriceSummary
+                      pricing={pricing}
+                      loading={pricingLoading}
+                      values={values}
+                      onChange={setValue}
+                    />
 
                     {result && (
                       <div className="space-y-2">
@@ -625,9 +630,13 @@ const money = (n: number) =>
 function PriceSummary({
   pricing,
   loading,
+  values,
+  onChange,
 }: {
   pricing: PriceBreakdown | null;
   loading: boolean;
+  values: Record<string, string>;
+  onChange: (control: string, value: string) => void;
 }) {
   if (loading && !pricing) {
     return (
@@ -668,18 +677,17 @@ function PriceSummary({
     ],
     ["Installation / Site", pricing.installation, pricing.installationCost, "add"],
   ];
-  // Only shown once something has been entered, so a quote with no one-off
-  // extra does not carry an empty row implying there might be one.
-  if (pricing.miscExtra || pricing.miscExtraCost) {
-    rows.push([
-      pricing.miscExtraDescription
-        ? `Misc Extra — ${pricing.miscExtraDescription}`
-        : "Misc Extra (per door)",
-      pricing.miscExtra ?? 0,
-      pricing.miscExtraCost ?? 0,
-      "add",
-    ]);
-  }
+  // Always shown, even at zero. M1's quote matrix keeps "Misc Extra (p/door)"
+  // on screen whether or not it has been used, and hiding it meant nobody
+  // could tell the field existed until they had already filled it in.
+  rows.push([
+    pricing.miscExtraDescription
+      ? `Misc Extra — ${pricing.miscExtraDescription}`
+      : "Misc Extra (per door)",
+    pricing.miscExtra ?? 0,
+    pricing.miscExtraCost ?? 0,
+    "add",
+  ]);
 
   return (
     <div className="space-y-3 rounded-md border p-3">
@@ -718,6 +726,8 @@ function PriceSummary({
           show "Assembly Upgrades $4,055.76" with no way to ask what for. */}
       <UpgradeDetail pricing={pricing} />
 
+      <MiscExtraFields values={values} onChange={onChange} />
+
       <div className="grid grid-cols-3 gap-2 border-t pt-2">
         <Metric label="Total sell" value={money(pricing.totalSell)} />
         <Metric label="Total cost" value={money(pricing.totalCost)} />
@@ -733,6 +743,78 @@ function PriceSummary({
           Unit sell {money(pricing.unitSell)} × {pricing.qty}.
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Misc Extra, editable on the summary.
+ *
+ * price_configuration() reads NUMMISCEXTRA / NUMMISCEXTRACOST /
+ * TXTMISCEXTRADESC straight out of the posted values, so these work whether or
+ * not the three parameters have been added to the configurator — the value
+ * rides along in the same dictionary either way.
+ *
+ * Each field keeps a draft and commits on blur. The pricing effect keys on
+ * JSON.stringify(values), so writing on every keystroke would fire a pricing
+ * call per character typed.
+ */
+function MiscExtraFields({
+  values,
+  onChange,
+}: {
+  values: Record<string, string>;
+  onChange: (control: string, value: string) => void;
+}) {
+  const [draft, setDraft] = React.useState<Record<string, string> | null>(null);
+
+  const get = (key: string) => draft?.[key] ?? values[key] ?? "";
+  const edit = (key: string, v: string) =>
+    setDraft((prev) => ({ ...(prev ?? {}), [key]: v }));
+  const commit = (key: string) => {
+    const v = draft?.[key];
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return Object.keys(next).length ? next : null;
+    });
+    if (v !== undefined && v !== (values[key] ?? "")) onChange(key, v);
+  };
+
+  const field = (key: string, label: string, numeric: boolean) => (
+    <div className="space-y-1">
+      <Label htmlFor={key} className="text-xs text-muted-foreground">
+        {label}
+      </Label>
+      <Input
+        id={key}
+        type={numeric ? "number" : "text"}
+        inputMode={numeric ? "decimal" : undefined}
+        className="h-8 text-sm"
+        value={get(key)}
+        placeholder={numeric ? "0.00" : "e.g. Duct Lifter"}
+        onChange={(e) => edit(key, e.target.value)}
+        onBlur={() => commit(key)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+      />
+    </div>
+  );
+
+  return (
+    <div className="space-y-2 rounded-md border p-2">
+      <p className="text-xs font-medium">Misc Extra (per door)</p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {field("TXTMISCEXTRADESC", "Description", false)}
+        {field("NUMMISCEXTRA", "Misc Price", true)}
+        {field("NUMMISCEXTRACOST", "Misc Cost", true)}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Charged once per door, so it is multiplied by the quantity. Fill in the
+        cost too — a price with no cost books the extra at full margin.
+      </p>
     </div>
   );
 }

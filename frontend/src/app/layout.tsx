@@ -13,8 +13,8 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: {
-    default: "Remax Configurator",
-    template: "%s | Remax Configurator",
+    default: "Remax ConfigHub",
+    template: "%s | Remax ConfigHub",
   },
   description: "Rapid door configurator and estimator for the REMAX sales team.",
   icons: {

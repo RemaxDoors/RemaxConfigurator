@@ -70,8 +70,16 @@ def load_configurators() -> list[dict]:
             "JOIN dbo.uCfgParameters p ON o.ParamID = p.ParamID "
             "WHERE o.IsActive = 1 ORDER BY p.CfgID, p.SortOrder, o.SortOrder"
         )).fetchall()
+        # SpecName names the customer specification a default belongs to.
+        # Without it the Defaults tab shows a specification's rows as 174
+        # entries with no door model and nothing to say why they exist.
+        spec_expr = (
+            "SpecName" if column_exists(conn, "uCfgDefaults", "SpecName")
+            else "CAST(NULL AS NVARCHAR(100))"
+        )
         defaults = conn.execute(text(
-            "SELECT CfgID, DoorModel, ControlName, DefaultValue "
+            "SELECT CfgID, DoorModel, ControlName, DefaultValue, "
+            f"{spec_expr} AS SpecName "
             "FROM dbo.uCfgDefaults ORDER BY CfgID, DoorModel, ControlName"
         )).fetchall()
 
@@ -80,10 +88,11 @@ def load_configurators() -> list[dict]:
         opts_by[(cfg_id, control)].append({"value": value, "label": label})
 
     defaults_by: dict = defaultdict(list)
-    for cfg_id, model, control, value in defaults:
-        defaults_by[cfg_id].append(
-            {"doorModel": model, "controlName": control, "value": value}
-        )
+    for cfg_id, model, control, value, spec in defaults:
+        row = {"doorModel": model, "controlName": control, "value": value}
+        if spec:
+            row["specName"] = spec
+        defaults_by[cfg_id].append(row)
 
     params_by: dict = defaultdict(list)
     for (cfg_id, control, label, kind, required, visible, order,

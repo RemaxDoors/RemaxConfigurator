@@ -133,3 +133,12 @@ PRINT 'Left untouched: RRD-06, RRD-13, RRD-16, RRD-61, RRD-62 already carry a';
 PRINT 'condition formula and are a flat quantity of 1 in the live engine.';
 PRINT '';
 PRINT 'Quantity still reads 1 on these rows - QuantityFormula overrides it.';
+
+-- -- Record this migration ------------------------------------------------
+-- Runs whether the script was applied by the runner or by hand in SSMS.
+-- Skipped silently if 000_migration_log.sql has not been run yet, so an older
+-- database is never blocked by the bookkeeping.
+IF OBJECT_ID('dbo.uCfgMigrations', 'U') IS NOT NULL
+    INSERT INTO dbo.uCfgMigrations (Version, Script, Notes)
+    VALUES (N'v0.2.0', N'02_set_activation_rule_formulas.sql', N'Condition + quantity formulas for the 21 activation rules');
+GO

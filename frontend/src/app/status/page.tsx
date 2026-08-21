@@ -59,6 +59,30 @@ interface Endpoint {
   responses: string[];
 }
 
+interface ChangeRow {
+  id: number;
+  table: string;
+  recordKey: string;
+  action: string;
+  changedBy: string | null;
+  changedAt: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+}
+
+interface ChangeLog {
+  available: boolean;
+  changes: ChangeRow[];
+  note?: string;
+}
+
+const ACTION_TONE: Record<string, string> = {
+  DELETE: "bg-destructive/10 text-destructive",
+  REPLACE: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  UPDATE: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  INSERT: "bg-green-600/10 text-green-700 dark:text-green-400",
+};
+
 const METHOD_TONE: Record<string, string> = {
   GET: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
   POST: "bg-green-600/10 text-green-700 dark:text-green-400",
@@ -69,10 +93,12 @@ const METHOD_TONE: Record<string, string> = {
 export default function StatusPage() {
   const [health, setHealth] = React.useState<{
     ok: boolean;
+    version?: string;
     checks: Check[];
     configurators: CfgCount[];
     warnings: Warning[];
   } | null>(null);
+  const [changes, setChanges] = React.useState<ChangeLog | null>(null);
   const [endpoints, setEndpoints] = React.useState<Endpoint[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [checkedAt, setCheckedAt] = React.useState<string>("");
@@ -80,12 +106,19 @@ export default function StatusPage() {
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [h, e] = await Promise.all([
+      const [h, e, c] = await Promise.all([
         fetch("/api/status", { cache: "no-store" }).then((r) => r.json()),
         fetch("/api/status/endpoints", { cache: "no-store" }).then((r) => r.json()),
+        // Never let the change log take the page down with it: it is the
+        // least important panel here and the most likely to be unavailable,
+        // because the table is missing on databases built before it existed.
+        fetch("/api/status/changes?limit=25", { cache: "no-store" })
+          .then((r) => r.json())
+          .catch(() => null),
       ]);
       setHealth(h);
       setEndpoints(e.endpoints ?? []);
+      setChanges(c && Array.isArray(c.changes) ? c : null);
       setCheckedAt(new Date().toLocaleTimeString());
     } finally {
       setLoading(false);
@@ -120,7 +153,16 @@ export default function StatusPage() {
 
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">System status</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight">System status</h1>
+            {/* The first question when a fix appears not to have worked is
+                whether the build carrying it is the one actually running. */}
+            {health?.version && (
+              <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                v{health.version}
+              </span>
+            )}
+          </div>
           <p className="text-muted-foreground">
             Health of the app, the API and both databases — plus the API reference.
           </p>
@@ -284,6 +326,95 @@ export default function StatusPage() {
           </p>
         )}
       </div>
+
+      <ChangeLogCard log={changes} />
+    </div>
+  );
+}
+
+/**
+ * Recent configuration changes.
+ *
+ * Every parameter, rule and default edit is written to uCfgChangeLog, and
+ * until now nothing read it — so "who changed this and when" had no answer.
+ * A missing table is reported as its own state rather than as an empty list,
+ * because a database that records nothing looks identical to a quiet one.
+ */
+function ChangeLogCard({ log }: { log: ChangeLog | null }) {
+  if (!log) return null;
+
+  if (!log.available) {
+    return (
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Change log</h2>
+        <p className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+          {log.note ??
+            "Configuration changes are not being recorded in this database."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-lg font-semibold">Change log</h2>
+        <span className="text-xs text-muted-foreground">
+          {log.changes.length === 0
+            ? "no changes recorded yet"
+            : `last ${log.changes.length} changes`}
+        </span>
+      </div>
+
+      {log.changes.length === 0 ? (
+        <p className="rounded-md border p-3 text-sm text-muted-foreground">
+          Nothing recorded yet. Edits made from Configurator Setup appear here.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium">When</th>
+                <th className="px-3 py-2 text-left font-medium">Action</th>
+                <th className="px-3 py-2 text-left font-medium">What</th>
+                <th className="px-3 py-2 text-left font-medium">Record</th>
+                <th className="px-3 py-2 text-left font-medium">By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {log.changes.map((c) => (
+                <tr key={c.id} className="border-t">
+                  <td className="whitespace-nowrap px-3 py-1.5 text-xs text-muted-foreground">
+                    {c.changedAt
+                      ? new Date(c.changedAt).toLocaleString()
+                      : "\u2014"}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                        ACTION_TONE[c.action?.toUpperCase()] ?? "bg-muted"
+                      }`}
+                    >
+                      {c.action}
+                    </span>
+                  </td>
+                  <td className="px-3 py-1.5 font-mono text-xs">{c.table}</td>
+                  <td
+                    className="max-w-[22rem] truncate px-3 py-1.5 font-mono text-xs"
+                    title={c.recordKey}
+                  >
+                    {c.recordKey}
+                  </td>
+                  <td className="px-3 py-1.5 text-xs text-muted-foreground">
+                    {c.changedBy ?? "\u2014"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

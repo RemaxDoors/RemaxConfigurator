@@ -4,7 +4,7 @@ Used by the app's Status page so a complaint can be checked in one look.
 """
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
 
 from .. import config_repo, m1_pricing, settings
@@ -109,6 +109,68 @@ def status():
         "checks": checks,
         "configurators": configurators,
         "warnings": warnings,
+    }
+
+
+@router.get("/status/changes")
+def recent_changes(limit: int = 50):
+    """Recent configuration changes, newest first.
+
+    uCfgChangeLog has been written to since the beginning and never read --
+    _log_change() swallows its own failures so that logging can never block a
+    save, which also means a missing table is invisible. Reporting `available`
+    separately from an empty list keeps "nothing has changed" distinct from
+    "changes are not being recorded at all".
+    """
+    if not settings.config_db_configured():
+        raise HTTPException(status_code=503, detail="Config DB not configured.")
+
+    limit = max(1, min(int(limit or 50), 500))
+    try:
+        with config_repo.get_config_engine().connect() as c:
+            if not c.execute(text(
+                "SELECT OBJECT_ID('dbo.uCfgChangeLog', 'U')"
+            )).scalar():
+                return {
+                    "available": False,
+                    "changes": [],
+                    "note": (
+                        "dbo.uCfgChangeLog does not exist in this database, so "
+                        "configuration changes are not being recorded. Run "
+                        "db/uCfg_change_log.sql to start capturing them."
+                    ),
+                }
+            rows = c.execute(text(
+                "SELECT TOP (:lim) ChangeID, PrimaryTable, RecordKey, Action, "
+                "ChangedBy, ChangedDate, OldValue, NewValue "
+                "FROM dbo.uCfgChangeLog ORDER BY ChangeID DESC"
+            ), {"lim": limit}).fetchall()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Change log unreadable: {exc}")
+
+    def clip(v):
+        # These hold whole JSON snapshots of a parameter or rule. The list view
+        # only needs enough to recognise the change.
+        if v is None:
+            return None
+        t = str(v)
+        return t if len(t) <= 300 else t[:300] + "..."
+
+    return {
+        "available": True,
+        "changes": [
+            {
+                "id": r[0],
+                "table": r[1],
+                "recordKey": r[2],
+                "action": r[3],
+                "changedBy": r[4],
+                "changedAt": r[5].isoformat() if r[5] else None,
+                "oldValue": clip(r[6]),
+                "newValue": clip(r[7]),
+            }
+            for r in rows
+        ],
     }
 
 

@@ -30,6 +30,15 @@ interface ParameterEditorDialogProps {
   onOpenChange: (open: boolean) => void;
   parameter: ConfiguratorParameter | null; // null = create
   existingControlNames: string[]; // to prevent duplicates on create
+  /**
+   * Starting point for a NEW parameter — used by Copy.
+   *
+   * Deliberately separate from `parameter`: that one means "editing this row",
+   * which switches the duplicate-name guard off. A copy has to keep the guard
+   * on, because the whole risk of copying is landing on a name that already
+   * exists and silently overwriting it through upsert_parameter().
+   */
+  seed?: ConfiguratorParameter | null;
   /** Section names already used by this configurator, offered in a dropdown. */
   existingSections?: string[];
   onSave: (parameter: ConfiguratorParameter) => void;
@@ -44,6 +53,7 @@ export function ParameterEditorDialog({
   onOpenChange,
   parameter,
   existingControlNames,
+  seed = null,
   existingSections = [],
   onSave,
 }: ParameterEditorDialogProps) {
@@ -52,8 +62,11 @@ export function ParameterEditorDialog({
   );
 
   React.useEffect(() => {
-    if (open) setDraft(parameter ? structuredClone(parameter) : emptyParameter());
-  }, [open, parameter]);
+    if (!open) return;
+    if (parameter) setDraft(structuredClone(parameter));
+    else if (seed) setDraft(structuredClone(seed));
+    else setDraft(emptyParameter());
+  }, [open, parameter, seed]);
 
   const patch = (p: Partial<ConfiguratorParameter>) =>
     setDraft((prev) => ({ ...prev, ...p }));

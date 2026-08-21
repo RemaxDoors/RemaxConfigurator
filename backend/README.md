@@ -1,4 +1,4 @@
-# Remax Configurator API (FastAPI)
+# Remax ConfigHub API (FastAPI)
 
 The Python backend for the new app. Owns **M1 access** and the **configurator rules**.
 The Next.js app calls it (via its own `/api/*` proxy routes).

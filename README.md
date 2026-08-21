@@ -1,4 +1,4 @@
-# Remax Configurator
+# Remax ConfigHub
 
 Sales quoting and door configuration for Remax rapid doors. Reads prices from
 **M1 (ECI ERP)** and keeps its configurator definition in a database rather than

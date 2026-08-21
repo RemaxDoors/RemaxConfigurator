@@ -12,7 +12,7 @@ export function Logo({ className }: { className?: string }) {
   return (
     <Link
       href="/"
-      aria-label="RemaxDoors — go to home"
+      aria-label="Remax ConfigHub — go to home"
       className={cn(
         "group inline-flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className
@@ -23,10 +23,10 @@ export function Logo({ className }: { className?: string }) {
       </span>
       <span className="flex flex-col leading-none">
         <span className="text-base font-bold tracking-tight text-foreground">
-          Remax<span className="text-primary">Doors</span>
+          Remax<span className="text-primary">ConfigHub</span>
         </span>
         <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-          Configurator
+          Remax Products
         </span>
       </span>
     </Link>

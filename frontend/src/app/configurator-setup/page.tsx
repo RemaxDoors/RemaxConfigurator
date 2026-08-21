@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
+  Copy,
   Download,
   FileDown,
   HelpCircle,
@@ -13,6 +14,7 @@ import {
   Pencil,
   Plus,
   Save,
+  Search,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -39,6 +41,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ParameterEditorDialog } from "@/components/admin/parameter-editor-dialog";
+import { DeleteParameterDialog } from "@/components/admin/delete-parameter-dialog";
 import { DefaultEditorDialog } from "@/components/admin/default-editor-dialog";
 import { RuleEditorDialog } from "@/components/admin/rule-editor-dialog";
 import {
@@ -56,6 +59,8 @@ import { fetchConfigData } from "@/lib/config-data";
 import {
   saveParameterToDb,
   deleteParameterFromDb,
+  fetchParameterUsage,
+  type ParameterUsage,
   replaceParametersInDb,
   replaceDefaultsInDb,
   replaceRulesInDb,
@@ -139,6 +144,76 @@ function nextRuleCode(
   }
 }
 
+/**
+ * Search box shared by the three tabs.
+ *
+ * Shows the match count rather than only filtering, so a search that finds
+ * nothing reads as "0 of 51" instead of an empty list that looks like the data
+ * failed to load.
+ */
+function SearchBox({
+  value,
+  onChange,
+  placeholder,
+  shown,
+  total,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  shown: number;
+  total: number;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="search"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          className="h-9 w-64 rounded-md border border-input bg-background pl-7 pr-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </div>
+      {value.trim() !== "" && (
+        <span className="text-xs text-muted-foreground">
+          {shown} of {total}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A free control name for a copy of `controlName`.
+ *
+ * Trailing digits are incremented, so copying CMBACT1 suggests CMBACT2 rather
+ * than CMBACT1_COPY — the numbered groups are the ones most worth copying, and
+ * group("CMBACT") only picks up names that end in a number.
+ * Anything already taken is skipped, since upsert_parameter() treats a name
+ * that exists as an edit and would overwrite it.
+ */
+function suggestCopyName(controlName: string, taken: string[]): string {
+  const used = new Set(taken.map((t) => t.toUpperCase()));
+  const m = /^(.*?)(\d+)$/.exec(controlName.trim());
+  if (m) {
+    const [, stem, digits] = m;
+    for (let n = Number(digits) + 1; n < Number(digits) + 50; n += 1) {
+      const candidate = `${stem}${n}`;
+      if (!used.has(candidate.toUpperCase())) return candidate.slice(0, 50);
+    }
+  }
+  const base = `${controlName.trim()}_COPY`;
+  if (!used.has(base.toUpperCase())) return base.slice(0, 50);
+  for (let n = 2; n < 50; n += 1) {
+    const candidate = `${base}${n}`;
+    if (!used.has(candidate.toUpperCase())) return candidate.slice(0, 50);
+  }
+  return base.slice(0, 50);
+}
+
 function categoryVariant(
   category: RuleCategory
 ): "default" | "secondary" | "outline" {
@@ -167,6 +242,17 @@ export default function ConfiguratorSetupPage() {
   const [tab, setTab] = React.useState("overview");
   const [editingDefault, setEditingDefault] =
     React.useState<ConfiguratorDefault | null>(null);
+  // Parameter deletion runs through a confirmation that lists what would go
+  // with it. `pendingDelete` holds the control name while its usage loads.
+  // One search box per tab. Kept separate so switching tabs does not carry a
+  // filter across and leave the next list looking mysteriously empty.
+  const [paramQuery, setParamQuery] = React.useState("");
+  const [ruleQuery, setRuleQuery] = React.useState("");
+  const [defaultQuery, setDefaultQuery] = React.useState("");
+  const [pendingDelete, setPendingDelete] = React.useState<string | null>(null);
+  const [deleteUsage, setDeleteUsage] = React.useState<ParameterUsage | null>(null);
+  const [deleteBusy, setDeleteBusy] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [saveNotice, setSaveNotice] = React.useState<{
     kind: "ok" | "error";
     text: string;
@@ -190,6 +276,25 @@ export default function ConfiguratorSetupPage() {
 
   React.useEffect(() => {
     let active = true;
+
+    // Honour ?id= and ?tab= so the catalog can open a specific configurator on
+    // a specific tab. Read straight off the URL rather than useSearchParams(),
+    // which would force this client page behind a Suspense boundary for no
+    // benefit.
+    //
+    // Done BEFORE the fetch, and outside its success path: which tab is open
+    // is a UI concern, and burying it after `if (!data.configurators?.length)
+    // return` meant a deep link was silently ignored whenever the config API
+    // was unreachable — exactly when someone following a link most needs the
+    // page to land where they expected.
+    const q =
+      typeof window === "undefined"
+        ? new URLSearchParams()
+        : new URLSearchParams(window.location.search);
+    const wanted = q.get("id");
+    const wantedTab = q.get("tab");
+    if (wantedTab && TAB_IDS.includes(wantedTab)) setTab(wantedTab);
+
     fetchConfigData()
       .then((data) => {
         if (!active) return;
@@ -198,17 +303,6 @@ export default function ConfiguratorSetupPage() {
         if (!data.configurators?.length) return;
         setConfigurators(data.configurators);
         setRules(data.rules ?? []);
-        // Honour ?id= and ?tab= so the catalog can open a specific
-        // configurator on a specific tab. Read straight off the URL rather
-        // than useSearchParams(), which would force this client page behind a
-        // Suspense boundary for no benefit.
-        const q =
-          typeof window === "undefined"
-            ? new URLSearchParams()
-            : new URLSearchParams(window.location.search);
-        const wanted = q.get("id");
-        const wantedTab = q.get("tab");
-        if (wantedTab && TAB_IDS.includes(wantedTab)) setTab(wantedTab);
         setConfiguratorId((prev) => {
           if (wanted && data.configurators.some((c) => c.id === wanted)) {
             return wanted;
@@ -243,6 +337,10 @@ export default function ConfiguratorSetupPage() {
   const [paramEditorOpen, setParamEditorOpen] = React.useState(false);
   const [editingParam, setEditingParam] =
     React.useState<ConfiguratorParameter | null>(null);
+  // Seed for a NEW parameter created by Copy. Kept apart from editingParam so
+  // the editor stays in create mode and keeps its duplicate-name guard.
+  const [seedParam, setSeedParam] =
+    React.useState<ConfiguratorParameter | null>(null);
 
   const [ruleEditorOpen, setRuleEditorOpen] = React.useState(false);
   const [editingRule, setEditingRule] = React.useState<ConfiguratorRule | null>(
@@ -250,40 +348,125 @@ export default function ConfiguratorSetupPage() {
   );
 
   const selected = configurators.find((c) => c.id === configuratorId);
-  const parameters = selected?.parameters ?? [];
+  // Same reason as `defaults` below: the search filter memoises on this, and
+  // `?? []` would hand it a fresh array on every render.
+  const parameters = React.useMemo(
+    () => selected?.parameters ?? [],
+    [selected]
+  );
   const controlNames = parameters.map((p) => p.controlName);
   const sectionNames = Array.from(
     new Set(parameters.map((p) => p.section).filter(Boolean))
   ) as string[];
-  const shownParameters = paramSection
-    ? parameters.filter((p) => (p.section ?? "") === paramSection)
-    : parameters;
+  const shownParameters = React.useMemo(() => {
+    const bySection = paramSection
+      ? parameters.filter((p) => (p.section ?? "") === paramSection)
+      : parameters;
+    const q = paramQuery.trim().toLowerCase();
+    if (!q) return bySection;
+    // Matches the label, the control name, the section, and any option value —
+    // "IXIO" should find the radar dropdowns, not just a field called IXIO.
+    return bySection.filter((p) =>
+      [
+        p.label,
+        p.controlName,
+        p.section ?? "",
+        ...(p.options ?? []).flatMap((o) => [o.value, o.label]),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [parameters, paramSection, paramQuery]);
 
   // How many rules reference each control name (shown on the parameter cards).
+  /**
+   * How many rules depend on each parameter.
+   *
+   * Counts formula references as well as condition rows. A parameter used only
+   * inside countStartsWith(group("CMBACT"), ...) has no condition row naming
+   * it, so counting rows alone reported zero and made it look safe to delete.
+   * This matches what the API's usage check finds, so the card and the delete
+   * confirmation cannot disagree.
+   */
   const ruleCountByControl = React.useMemo(() => {
     const counts = new Map<string, number>();
+    const controls = (selected?.parameters ?? []).map((p) =>
+      p.controlName.toUpperCase()
+    );
     for (const rule of rules) {
       if (rule.configuratorId !== configuratorId) continue;
       const seen = new Set<string>();
       for (const c of rule.conditions) {
-        const key = c.controlName.toUpperCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        counts.set(key, (counts.get(key) ?? 0) + 1);
+        seen.add(c.controlName.toUpperCase());
       }
+      const formulas = [
+        rule.conditionFormula,
+        rule.quantityFormula,
+        rule.resultRevisionFormula,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toUpperCase();
+      if (formulas) {
+        for (const name of controls) {
+          if (formulas.includes(name)) seen.add(name);
+        }
+      }
+      seen.forEach((key) => {
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      });
     }
     return counts;
-  }, [rules, configuratorId]);
-  const visibleRules = rules.filter((r) => r.configuratorId === configuratorId);
-  const defaults = selected?.defaults ?? [];
+  }, [rules, configuratorId, selected]);
+  const allRulesForCfg = rules.filter((r) => r.configuratorId === configuratorId);
+  const visibleRules = React.useMemo(() => {
+    const q = ruleQuery.trim().toLowerCase();
+    if (!q) return allRulesForCfg;
+    // Includes the formulas, so searching a control name finds the rules that
+    // only mention it inside countStartsWith(...) as well as the ones with a
+    // condition row for it.
+    return allRulesForCfg.filter((r) =>
+      [
+        r.id,
+        r.name,
+        r.resultPartId ?? "",
+        r.category,
+        r.notes ?? "",
+        r.conditionFormula ?? "",
+        r.quantityFormula ?? "",
+        r.resultRevisionFormula ?? "",
+        ...r.conditions.map((c) => `${c.controlName} ${c.value}`),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [allRulesForCfg, ruleQuery]);
+  // Memoised because the filtered list below depends on it: `?? []` builds a
+  // new array every render, which would defeat the memo entirely.
+  const defaults = React.useMemo(
+    () => selected?.defaults ?? [],
+    [selected]
+  );
   // A null door model means the row is conditional or manual, not per-model.
   const ALL_MODELS = "(all models)";
   const defaultModels = Array.from(
     new Set(defaults.map((d) => d.doorModel ?? ALL_MODELS))
   ).sort();
-  const shownDefaults = defaultModel
-    ? defaults.filter((d) => (d.doorModel ?? ALL_MODELS) === defaultModel)
-    : defaults;
+  const shownDefaults = React.useMemo(() => {
+    const byModel = defaultModel
+      ? defaults.filter((d) => (d.doorModel ?? ALL_MODELS) === defaultModel)
+      : defaults;
+    const q = defaultQuery.trim().toLowerCase();
+    if (!q) return byModel;
+    return byModel.filter((d) =>
+      [d.controlName, d.doorModel ?? ALL_MODELS, d.value ?? "", d.specName ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [defaults, defaultModel, defaultQuery, ALL_MODELS]);
 
   // ---- parameter handlers ----
   const saveParameter = async (param: ConfiguratorParameter) => {
@@ -323,28 +506,71 @@ export default function ConfiguratorSetupPage() {
     }
   };
 
+  /**
+   * Ask what uses the parameter, then confirm.
+   *
+   * The previous version removed it from local state first and called the API
+   * afterwards, so a refusal still looked like it had worked. Nothing is
+   * removed from the screen now until the delete actually succeeds.
+   */
   const deleteParameter = async (controlName: string) => {
-    setConfigurators((prev) =>
-      prev.map((c) =>
-        c.id === configuratorId
-          ? {
-              ...c,
-              parameters: c.parameters.filter(
-                (p) => p.controlName !== controlName
-              ),
-            }
-          : c
-      )
-    );
-    if (source !== "api") return;
+    setPendingDelete(controlName);
+    setDeleteUsage(null);
+    setDeleteError(null);
+    if (source !== "api") {
+      // No API to ask — offer the plain confirmation rather than nothing.
+      setDeleteUsage({ controlName, rules: [], validations: [], defaults: [] });
+      return;
+    }
     try {
-      await deleteParameterFromDb(configuratorId, controlName);
-      setSaveNotice({ kind: "ok", text: `Deleted “${controlName}”.` });
+      setDeleteUsage(await fetchParameterUsage(configuratorId, controlName));
     } catch (err) {
-      setSaveNotice({
-        kind: "error",
-        text: err instanceof Error ? err.message : "Delete failed.",
-      });
+      setDeleteUsage({ controlName, rules: [], validations: [], defaults: [] });
+      setDeleteError(
+        err instanceof Error
+          ? `Could not check what uses this parameter: ${err.message}`
+          : "Could not check what uses this parameter."
+      );
+    }
+  };
+
+  const confirmDeleteParameter = async (cascade: boolean) => {
+    const controlName = pendingDelete;
+    if (!controlName) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      if (source === "api") {
+        await deleteParameterFromDb(configuratorId, controlName, cascade);
+      }
+      setConfigurators((prev) =>
+        prev.map((c) =>
+          c.id === configuratorId
+            ? {
+                ...c,
+                parameters: c.parameters.filter(
+                  (p) => p.controlName !== controlName
+                ),
+                defaults: (c.defaults ?? []).filter(
+                  (d) => d.controlName !== controlName
+                ),
+              }
+            : c
+        )
+      );
+      if (cascade) {
+        const gone = new Set(
+          (deleteUsage?.rules ?? []).map((r) => r.ruleCode)
+        );
+        setRules((prev) => prev.filter((r) => !gone.has(r.id)));
+      }
+      setPendingDelete(null);
+      setDeleteUsage(null);
+      setSaveNotice({ kind: "ok", text: `Deleted \u201C${controlName}\u201D.` });
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Delete failed.");
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -808,6 +1034,13 @@ export default function ConfiguratorSetupPage() {
         {/* ---------------- Parameters ---------------- */}
         <TabsContent value="parameters" className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
+            <SearchBox
+              value={paramQuery}
+              onChange={setParamQuery}
+              placeholder="Search parameters, options…"
+              shown={shownParameters.length}
+              total={parameters.length}
+            />
             {sectionNames.length > 0 && (
               <>
                 <span className="text-sm text-muted-foreground">Section</span>
@@ -856,6 +1089,7 @@ export default function ConfiguratorSetupPage() {
             <Button
               onClick={() => {
                 setEditingParam(null);
+                setSeedParam(null);
                 setParamEditorOpen(true);
               }}
             >
@@ -893,12 +1127,36 @@ export default function ConfiguratorSetupPage() {
                           size="icon"
                           className="h-7 w-7"
                           onClick={() => {
+                            setSeedParam(null);
                             setEditingParam(p);
                             setParamEditorOpen(true);
                           }}
                           aria-label="Edit parameter"
                         >
                           <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => {
+                            // Everything but the name, which must be free —
+                            // the editor treats an existing name as an edit.
+                            setEditingParam(null);
+                            setSeedParam({
+                              ...structuredClone(p),
+                              controlName: suggestCopyName(
+                                p.controlName,
+                                controlNames
+                              ),
+                              label: `${p.label} (copy)`,
+                            });
+                            setParamEditorOpen(true);
+                          }}
+                          aria-label={`Copy ${p.controlName}`}
+                          title="Copy this parameter"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -935,6 +1193,13 @@ export default function ConfiguratorSetupPage() {
 
         {/* ---------------- Rules ---------------- */}
         <TabsContent value="rules" className="space-y-3">
+          <SearchBox
+            value={ruleQuery}
+            onChange={setRuleQuery}
+            placeholder="Search rules, parts, formulas…"
+            shown={visibleRules.length}
+            total={allRulesForCfg.length}
+          />
           {rulesStatus && (
             <div
               className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
@@ -1094,6 +1359,13 @@ export default function ConfiguratorSetupPage() {
         {/* ---------------- Defaults ---------------- */}
         <TabsContent value="defaults" className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
+            <SearchBox
+              value={defaultQuery}
+              onChange={setDefaultQuery}
+              placeholder="Search defaults, specifications…"
+              shown={shownDefaults.length}
+              total={defaults.length}
+            />
             <span className="text-sm text-muted-foreground">
               When a door model is chosen, these parameters are pre-set.
             </span>
@@ -1147,6 +1419,7 @@ export default function ConfiguratorSetupPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Door Model</TableHead>
+                    <TableHead>Specification</TableHead>
                     <TableHead>Parameter</TableHead>
                     <TableHead>Default Value</TableHead>
                     <TableHead className="w-[1%] text-right">Edit</TableHead>
@@ -1156,7 +1429,7 @@ export default function ConfiguratorSetupPage() {
                   {shownDefaults.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={4}
+                        colSpan={5}
                         className="py-10 text-center text-muted-foreground"
                       >
                         No defaults for this configurator. Import a CSV to add them.
@@ -1169,6 +1442,9 @@ export default function ConfiguratorSetupPage() {
                           <Badge variant={d.doorModel ? "secondary" : "outline"}>
                             {d.doorModel ?? ALL_MODELS}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {d.specName ?? "—"}
                         </TableCell>
                         <TableCell className="font-mono text-xs">
                           {d.controlName}
@@ -1205,6 +1481,7 @@ export default function ConfiguratorSetupPage() {
         onOpenChange={setParamEditorOpen}
         parameter={editingParam}
         existingControlNames={controlNames.map((n) => n.toUpperCase())}
+        seed={seedParam}
         existingSections={sectionNames}
         onSave={saveParameter}
       />
@@ -1219,16 +1496,32 @@ export default function ConfiguratorSetupPage() {
         onSave={saveRule}
       />
 
+      <DeleteParameterDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setPendingDelete(null);
+            setDeleteUsage(null);
+            setDeleteError(null);
+          }
+        }}
+        usage={deleteUsage}
+        busy={deleteBusy}
+        error={deleteError}
+        onConfirm={confirmDeleteParameter}
+      />
+
       <DefaultEditorDialog
         open={editingDefault !== null}
         onOpenChange={(o) => !o && setEditingDefault(null)}
         configuratorId={configuratorId}
         value={editingDefault}
         parameters={parameters}
-        onSaved={(updated) => {
-          // Patch in place rather than refetching: the row is identified by
-          // door model + control name, and a null door model must match a null,
-          // not the string "null".
+        allDefaults={defaults}
+        onSaved={(updated, movedFrom) => {
+          // Rows are identified by door model + control name, and a null
+          // model must match a null rather than the string "null". After a
+          // move the row is found by where it WAS, not where it now is.
           setConfigurators((prev) =>
             prev.map((c) =>
               c.id !== configuratorId
@@ -1237,7 +1530,8 @@ export default function ConfiguratorSetupPage() {
                     ...c,
                     defaults: (c.defaults ?? []).map((d) =>
                       d.controlName === updated.controlName &&
-                      d.doorModel === updated.doorModel
+                      (d.doorModel ?? null) ===
+                        (movedFrom !== null ? movedFrom : updated.doorModel)
                         ? updated
                         : d
                     ),
@@ -1246,7 +1540,31 @@ export default function ConfiguratorSetupPage() {
           );
           setSaveNotice({
             kind: "ok",
-            text: `Default for ${updated.controlName} saved.`,
+            text: movedFrom
+              ? `Moved ${updated.controlName} to ${updated.doorModel ?? "all models"}.`
+              : `Default for ${updated.controlName} saved.`,
+          });
+        }}
+        onDeleted={(removed) => {
+          setConfigurators((prev) =>
+            prev.map((c) =>
+              c.id !== configuratorId
+                ? c
+                : {
+                    ...c,
+                    defaults: (c.defaults ?? []).filter(
+                      (d) =>
+                        !(
+                          d.controlName === removed.controlName &&
+                          (d.doorModel ?? null) === (removed.doorModel ?? null)
+                        )
+                    ),
+                  }
+            )
+          );
+          setSaveNotice({
+            kind: "ok",
+            text: `Deleted the default for ${removed.controlName} on ${removed.doorModel ?? "all models"}.`,
           });
         }}
       />
