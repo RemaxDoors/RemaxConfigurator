@@ -16,8 +16,18 @@ export interface PriceBreakdown {
   doorCost: number;
   installation: number;
   installationCost: number;
+  /** Assembly + material combined — M1's quote matrix shows these separately. */
   materialUpgrade: number;
   materialUpgradeCost: number;
+  /** The two halves of materialUpgrade, for a summary that mirrors M1. */
+  assemblyUpgrade: number;
+  assemblyUpgradeCost: number;
+  materialOnlyUpgrade: number;
+  materialOnlyUpgradeCost: number;
+  /** Free-form per-door extra, mirroring M1's "Misc Extra (p/door)". */
+  miscExtra: number;
+  miscExtraCost: number;
+  miscExtraDescription: string;
   materialDiscount: number;
   materialDiscountCost: number;
   unitSell: number;

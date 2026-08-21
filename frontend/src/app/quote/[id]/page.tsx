@@ -171,6 +171,31 @@ export default function QuotePage({ params }: { params: { id: string } }) {
     });
   };
 
+  /**
+   * Change a line's quantity or override its unit price straight from the grid.
+   *
+   * The margin stored on the line is left alone: it is what M1 last returned
+   * for the configured door, and overwriting it here would lose that reference.
+   * The grid recomputes the displayed margin from the price on screen instead.
+   */
+  const handleUpdateLine = (
+    lineId: string,
+    patch: { qty?: number; unitPrice?: number }
+  ) =>
+    setLines((lines) =>
+      lines.map((l) => {
+        if (l.quoteLineId !== lineId) return l;
+        const next = { ...l };
+        if (patch.qty !== undefined && patch.qty >= 0) {
+          next.item = { ...l.item, partQty: patch.qty };
+        }
+        if (patch.unitPrice !== undefined && patch.unitPrice >= 0) {
+          next.totalUnitPrice = patch.unitPrice;
+        }
+        return next;
+      })
+    );
+
   const handleConfigComplete = (
     values: Record<string, string>,
     result: ValidationResult,
@@ -281,6 +306,7 @@ export default function QuotePage({ params }: { params: { id: string } }) {
           onEdit={handleEdit}
           onCopy={handleCopy}
           onDelete={handleDelete}
+          onUpdateLine={handleUpdateLine}
         />
       )}
 

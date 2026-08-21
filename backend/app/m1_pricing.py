@@ -217,8 +217,31 @@ def price_configuration(values: dict) -> dict:
     material_upgrade_sell = assembly_sell + material_sell
     material_upgrade_cost = assembly_cost + material_cost
 
-    unit_sell = door["sell"] + material_upgrade_sell - disc_sell + inst_sell
-    unit_cost = door["cost"] + material_upgrade_cost - disc_cost + inst_cost
+    # --- Misc extra, per door ------------------------------------------------
+    # M1's quote matrix carries a free-form "Misc Extra (p/door)" with its own
+    # description, for one-offs that are not a catalogue part (a duct lifter,
+    # say). It is per door, so it joins unit_sell and is multiplied by qty with
+    # everything else. Cost is entered separately -- leaving it blank books the
+    # extra at full margin, which is rarely right, so it is worth filling in.
+    misc_sell = _num(values.get("NUMMISCEXTRA"))
+    misc_cost = _num(values.get("NUMMISCEXTRACOST"))
+    misc_desc = str(values.get("TXTMISCEXTRADESC", "") or "").strip()
+    if misc_sell or misc_cost:
+        lines.append({
+            "category": "MISC_EXTRA",
+            "partId": "MISC-EXTRA",
+            "description": misc_desc or "Misc extra",
+            "qty": 1,
+            "sell": misc_sell,
+            "cost": misc_cost,
+        })
+
+    unit_sell = (
+        door["sell"] + material_upgrade_sell - disc_sell + inst_sell + misc_sell
+    )
+    unit_cost = (
+        door["cost"] + material_upgrade_cost - disc_cost + inst_cost + misc_cost
+    )
     total_sell = unit_sell * qty
     total_cost = unit_cost * qty
     margin_percent = ((unit_sell - unit_cost) / unit_sell * 100) if unit_sell else 0.0
@@ -232,8 +255,19 @@ def price_configuration(values: dict) -> dict:
         "doorCost": round(door["cost"], 2),
         "installation": round(inst_sell, 2),
         "installationCost": round(inst_cost, 2),
+        # materialUpgrade is assembly + material combined, which is what M1's
+        # quote matrix calls two separate figures. Kept under its existing name
+        # so nothing reading it changes, with the two halves reported alongside
+        # so a summary can show them the way M1 does.
         "materialUpgrade": round(material_upgrade_sell, 2),
         "materialUpgradeCost": round(material_upgrade_cost, 2),
+        "assemblyUpgrade": round(assembly_sell, 2),
+        "assemblyUpgradeCost": round(assembly_cost, 2),
+        "materialOnlyUpgrade": round(material_sell, 2),
+        "materialOnlyUpgradeCost": round(material_cost, 2),
+        "miscExtra": round(misc_sell, 2),
+        "miscExtraCost": round(misc_cost, 2),
+        "miscExtraDescription": misc_desc,
         "materialDiscount": round(disc_sell, 2),
         "materialDiscountCost": round(disc_cost, 2),
         "unitSell": round(unit_sell, 2),

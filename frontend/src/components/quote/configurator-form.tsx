@@ -6,6 +6,7 @@ import {
   Calculator,
   CheckCircle2,
   ChevronLeft,
+  ChevronDown,
   ChevronRight,
   Loader2,
   TriangleAlert,
@@ -643,13 +644,42 @@ function PriceSummary({
     );
   }
 
-  const rows: [string, number, "add" | "sub" | "plain"][] = [
-    ["Door Price", pricing.doorPrice, "plain"],
-    ["Door Cost", pricing.doorCost, "plain"],
-    ["Material Upgrade", pricing.materialUpgrade, "add"],
-    ["Material Discount", pricing.materialDiscount, "sub"],
-    ["Installation", pricing.installation, "add"],
+  // Assembly and material are shown apart, as M1's quote matrix does.
+  // pricing.materialUpgrade is the two added together.
+  const rows: [string, number, number, "add" | "sub" | "plain"][] = [
+    ["Door Price", pricing.doorPrice, pricing.doorCost, "plain"],
+    [
+      "Assembly Upgrades",
+      pricing.assemblyUpgrade ?? 0,
+      pricing.assemblyUpgradeCost ?? 0,
+      "add",
+    ],
+    [
+      "Material Upgrades",
+      pricing.materialOnlyUpgrade ?? 0,
+      pricing.materialOnlyUpgradeCost ?? 0,
+      "add",
+    ],
+    [
+      "Material Discounts",
+      pricing.materialDiscount,
+      pricing.materialDiscountCost,
+      "sub",
+    ],
+    ["Installation / Site", pricing.installation, pricing.installationCost, "add"],
   ];
+  // Only shown once something has been entered, so a quote with no one-off
+  // extra does not carry an empty row implying there might be one.
+  if (pricing.miscExtra || pricing.miscExtraCost) {
+    rows.push([
+      pricing.miscExtraDescription
+        ? `Misc Extra — ${pricing.miscExtraDescription}`
+        : "Misc Extra (per door)",
+      pricing.miscExtra ?? 0,
+      pricing.miscExtraCost ?? 0,
+      "add",
+    ]);
+  }
 
   return (
     <div className="space-y-3 rounded-md border p-3">
@@ -659,20 +689,34 @@ function PriceSummary({
       </div>
 
       <div className="space-y-1">
-        {rows.map(([label, value, kind]) => (
-          <div key={label} className="flex justify-between text-sm">
-            <span className="text-muted-foreground">{label}</span>
+        <div className="flex items-baseline gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+          <span className="flex-1" />
+          <span className="w-24 text-right">Sell</span>
+          <span className="w-24 text-right">Cost</span>
+        </div>
+        {rows.map(([label, sell, cost, kind]) => (
+          <div key={label} className="flex items-baseline gap-2 text-sm">
+            <span className="flex-1 text-muted-foreground">{label}</span>
             <span
-              className={`tabular-nums ${
+              className={`w-24 text-right tabular-nums ${
                 kind === "sub" ? "text-success" : "font-medium"
               }`}
             >
-              {kind === "sub" ? "−" : ""}
-              {money(value)}
+              {kind === "sub" && sell ? "−" : ""}
+              {money(sell)}
+            </span>
+            <span className="w-24 text-right text-xs tabular-nums text-muted-foreground">
+              {kind === "sub" && cost ? "−" : ""}
+              {money(cost)}
             </span>
           </div>
         ))}
       </div>
+
+      {/* Where each of those figures comes from. It used to be visible only by
+          expanding the line on the quote screen, which meant the summary could
+          show "Assembly Upgrades $4,055.76" with no way to ask what for. */}
+      <UpgradeDetail pricing={pricing} />
 
       <div className="grid grid-cols-3 gap-2 border-t pt-2">
         <Metric label="Total sell" value={money(pricing.totalSell)} />
@@ -688,6 +732,82 @@ function PriceSummary({
         <p className="text-xs text-muted-foreground">
           Unit sell {money(pricing.unitSell)} × {pricing.qty}.
         </p>
+      )}
+    </div>
+  );
+}
+
+const DETAIL_GROUPS: { key: string; label: string; negative?: boolean }[] = [
+  { key: "ASSEMBLY_UPGRADE", label: "Assembly Upgrades" },
+  { key: "MATERIAL_UPGRADE", label: "Material Upgrades" },
+  { key: "MATERIAL_DISCOUNT", label: "Material Discounts", negative: true },
+  { key: "INSTALLATION", label: "Installation / Site" },
+  { key: "MISC_EXTRA", label: "Misc Extra" },
+];
+
+/** Every part behind the totals above — qty, sell and cost for each. */
+function UpgradeDetail({ pricing }: { pricing: PriceBreakdown }) {
+  const [open, setOpen] = React.useState(false);
+  const lines = pricing.lines ?? [];
+  if (lines.length === 0) return null;
+
+  return (
+    <div className="rounded-md border">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-xs font-medium hover:bg-accent"
+      >
+        {open ? (
+          <ChevronDown className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5" />
+        )}
+        {open ? "Hide" : "Show"} the {lines.length} item
+        {lines.length === 1 ? "" : "s"} behind these figures
+      </button>
+
+      {open && (
+        <div className="space-y-2 border-t p-2">
+          {DETAIL_GROUPS.map(({ key, label, negative }) => {
+            const items = lines.filter((l) => l.category === key);
+            if (items.length === 0) return null;
+            return (
+              <div key={key} className="space-y-0.5">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {label}
+                </p>
+                {items.map((l, i) => (
+                  <div
+                    key={`${l.partId}-${i}`}
+                    className="flex items-baseline gap-2 text-xs odd:bg-muted/40"
+                  >
+                    <span className="w-32 shrink-0 truncate font-mono">
+                      {l.partId}
+                    </span>
+                    <span className="flex-1 truncate text-muted-foreground">
+                      {l.description}
+                    </span>
+                    <span className="w-10 text-right text-muted-foreground">
+                      ×{l.qty}
+                    </span>
+                    <span
+                      className={`w-20 text-right tabular-nums ${
+                        negative ? "text-success" : ""
+                      }`}
+                    >
+                      {negative ? "−" : ""}
+                      {money(l.sell)}
+                    </span>
+                    <span className="w-20 text-right tabular-nums text-muted-foreground">
+                      {money(l.cost)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

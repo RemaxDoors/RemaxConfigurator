@@ -124,10 +124,92 @@ interface QuoteLinesProps {
   onEdit: (lineId: string) => void;
   onCopy: (lineId: string) => void;
   onDelete: (lineId: string) => void;
+  /** Change a line's quantity or override its unit price. */
+  onUpdateLine: (lineId: string, patch: { qty?: number; unitPrice?: number }) => void;
 }
 
 function lineTotal(line: QuoteLine): number {
   return (Number(line.totalUnitPrice) || 0) * (Number(line.item.partQty) || 0);
+}
+
+/**
+ * Unit cost for a line: a door's comes from its M1 breakdown, a catalogue
+ * part's from the snapshot taken when it was added. Shown so the margin beside
+ * it can be checked, and so an overridden unit price can be judged against
+ * something.
+ */
+function unitCost(line: QuoteLine): number | null {
+  if (line.breakdown) return line.breakdown.unitCost;
+  if (typeof line.item.cost === "number") return line.item.cost;
+  return null;
+}
+
+/**
+ * Margin recomputed from the price on screen, not the one M1 last returned.
+ *
+ * Returned as a FRACTION to match QuoteLine.marginPercent, which despite its
+ * name holds 0.5014 rather than 50.14 — percent() does the multiplying.
+ */
+function liveMargin(line: QuoteLine): number | null {
+  const cost = unitCost(line);
+  const sell = Number(line.totalUnitPrice) || 0;
+  if (cost === null || !sell) return null;
+  return (sell - cost) / sell;
+}
+
+/**
+ * Number cell that commits on blur or Enter.
+ *
+ * It keeps its own draft while focused so a keystroke does not re-render the
+ * whole table and lose the caret, and it sits inside a row that selects on
+ * click and opens the configurator on double-click — hence stopping both.
+ */
+function EditableNumber({
+  value,
+  onCommit,
+  decimals = 0,
+  ariaLabel,
+}: {
+  value: number;
+  onCommit: (next: number) => void;
+  decimals?: number;
+  ariaLabel: string;
+}) {
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const shown = draft ?? value.toFixed(decimals);
+
+  const commit = () => {
+    if (draft === null) return;
+    const n = Number(draft);
+    setDraft(null);
+    // A blank or non-numeric entry reverts rather than zeroing the line.
+    if (draft.trim() === "" || Number.isNaN(n)) return;
+    if (n !== value) onCommit(n);
+  };
+
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      aria-label={ariaLabel}
+      className="w-24 rounded border border-transparent bg-transparent px-1 py-0.5 text-right tabular-nums hover:border-input focus:border-input focus:bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+      value={shown}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          e.currentTarget.blur();
+        }
+        if (e.key === "Escape") {
+          setDraft(null);
+          e.currentTarget.blur();
+        }
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+    />
+  );
 }
 
 export function QuoteLines({
@@ -139,6 +221,7 @@ export function QuoteLines({
   onEdit,
   onCopy,
   onDelete,
+  onUpdateLine,
 }: QuoteLinesProps) {
   const quoteTotal = lines.reduce((sum, line) => sum + lineTotal(line), 0);
   const hasSelection = selectedLineId !== null;
@@ -176,6 +259,7 @@ export function QuoteLines({
                   <TableHead className="text-right">Install Total</TableHead>
                   <TableHead className="text-right">Reseller %</TableHead>
                   <TableHead className="text-right">Unit Price</TableHead>
+                  <TableHead className="text-right">Unit Cost</TableHead>
                   <TableHead className="text-right">Margin</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                 </TableRow>
@@ -230,7 +314,13 @@ export function QuoteLines({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {line.item.partQty}
+                      <EditableNumber
+                        value={Number(line.item.partQty) || 0}
+                        ariaLabel={`Quantity for line ${line.quoteLineId}`}
+                        onCommit={(qty) =>
+                          onUpdateLine(line.quoteLineId, { qty })
+                        }
+                      />
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {money(line.doorTotal)}
@@ -242,10 +332,22 @@ export function QuoteLines({
                       {line.resellerDiscountPercent}%
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {money(line.totalUnitPrice)}
+                      <EditableNumber
+                        value={Number(line.totalUnitPrice) || 0}
+                        decimals={2}
+                        ariaLabel={`Unit price for line ${line.quoteLineId}`}
+                        onCommit={(unitPrice) =>
+                          onUpdateLine(line.quoteLineId, { unitPrice })
+                        }
+                      />
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {unitCost(line) === null ? "—" : money(unitCost(line)!)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {percent(line.marginPercent)}
+                      {liveMargin(line) === null
+                        ? percent(line.marginPercent)
+                        : percent(liveMargin(line)!)}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">
                       {money(lineTotal(line))}
@@ -253,7 +355,7 @@ export function QuoteLines({
                   </TableRow>
                   {isOpen && line.breakdown && (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={11} className="bg-muted/30 p-0">
+                      <TableCell colSpan={12} className="bg-muted/30 p-0">
                         <LineBreakdown breakdown={line.breakdown} />
                       </TableCell>
                     </TableRow>
