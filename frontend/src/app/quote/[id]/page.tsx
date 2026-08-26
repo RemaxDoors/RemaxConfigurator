@@ -17,6 +17,10 @@ import { CustomerPicker } from "@/components/quote/customer-picker";
 import { QuoteHeader } from "@/components/quote/quote-header";
 import { QuoteLines } from "@/components/quote/quote-lines";
 import {
+  SalesChecklist,
+  buildChecklist,
+} from "@/components/quote/sales-checklist";
+import {
   NewLineDialog,
   type NewLineResult,
 } from "@/components/quote/new-line-dialog";
@@ -26,7 +30,8 @@ import type { ValidationResult } from "@/lib/validate";
 import type { PriceBreakdown } from "@/types/pricing";
 import { isDoor } from "@/types/door";
 import type { Location, Party } from "@/types/customer";
-import type { Quote, QuoteLine } from "@/types/quote";
+import { QUOTE_STATUSES } from "@/types/quote";
+import type { Quote, QuoteLine, QuoteStatus } from "@/types/quote";
 
 const EMPTY_PARTY: Party = { id: "", name: "" };
 const EMPTY_LOCATION: Location = { id: "", name: "" };
@@ -40,7 +45,7 @@ function makeQuote(quoteId: string, isNew: boolean): Quote {
     projectName: "",
     salesPerson: "",
     revision: "A",
-    status: isNew ? "Draft" : "Open",
+    status: "Quote In Progress",
     totals: {
       doorTotal: 0,
       installationTotal: 0,
@@ -78,6 +83,30 @@ export default function QuotePage({ params }: { params: { id: string } }) {
 
   const patchQuote = (patch: Partial<Quote>) =>
     setQuote((prev) => ({ ...prev, ...patch }));
+
+  const [checklistDone, setChecklistDone] = React.useState(false);
+
+  const checklist = React.useMemo(
+    () =>
+      buildChecklist({
+        customer: quote.customer,
+        shipToLocation: quote.shipToLocation,
+        projectName: quote.projectName,
+        salesPerson: quote.salesPerson,
+      }),
+    [
+      quote.customer,
+      quote.shipToLocation,
+      quote.projectName,
+      quote.salesPerson,
+    ]
+  );
+
+  // Editing a field back into a bad state has to un-complete the checklist,
+  // or the badge would keep claiming a quote is ready when it no longer is.
+  React.useEffect(() => {
+    if (checklistDone && checklist.some((i) => !i.ok)) setChecklistDone(false);
+  }, [checklist, checklistDone]);
 
   const setLines = (updater: (lines: QuoteLine[]) => QuoteLine[]) =>
     setQuote((prev) => ({ ...prev, lines: updater(prev.lines) }));
@@ -257,10 +286,40 @@ export default function QuotePage({ params }: { params: { id: string } }) {
         <h1 className="text-2xl font-bold tracking-tight">
           {isNew ? "New Quote" : `Quote ${quoteId}`}
         </h1>
-        <Badge variant={quote.status === "Draft" ? "secondary" : "success"}>
-          {quote.status}
-        </Badge>
+        <select
+          aria-label="Quote status"
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          value={quote.status}
+          onChange={(e) =>
+            patchQuote({ status: e.target.value as QuoteStatus })
+          }
+        >
+          {QUOTE_STATUSES.map((sx) => (
+            <option key={sx} value={sx}>
+              {sx}
+            </option>
+          ))}
+        </select>
+        {quote.status !== "Quote In Progress" && (
+          <Badge variant="success">{quote.status}</Badge>
+        )}
       </div>
+
+      {/* The four fields M1 will not take a quote without. Shown before the
+          header rather than after, so the gap is visible while the fields it
+          refers to are still on screen. */}
+      <SalesChecklist
+        items={checklist}
+        completed={checklistDone}
+        onComplete={() => {
+          setChecklistDone(true);
+          // Completing the checklist is what moves a quote on, so the two are
+          // not tracked separately and cannot disagree.
+          if (quote.status === "Quote In Progress") {
+            patchQuote({ status: "Quote Sent to Customer" });
+          }
+        }}
+      />
 
       <QuoteHeader
         customer={quote.customer}

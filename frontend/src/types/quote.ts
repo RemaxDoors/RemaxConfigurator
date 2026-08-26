@@ -3,7 +3,26 @@ import type { Door } from "@/types/door";
 import type { Part } from "@/types/part";
 import type { PriceBreakdown } from "@/types/pricing";
 
-export type QuoteStatus = "Draft" | "Open" | "Won" | "Lost";
+/**
+ * Where a quote is in the sales process.
+ *
+ * These are the words the sales team uses, not database shorthand — the badge
+ * on the header is read at a glance and "Open" said nothing about whether the
+ * customer had actually seen it.
+ *
+ * Order matters: QUOTE_STATUSES is the progression, and the checklist gates the
+ * move out of the first one.
+ */
+export type QuoteStatus =
+  | "Quote In Progress"
+  | "Quote Sent to Customer"
+  | "Quote Won";
+
+export const QUOTE_STATUSES: QuoteStatus[] = [
+  "Quote In Progress",
+  "Quote Sent to Customer",
+  "Quote Won",
+];
 
 export interface QuoteTotals {
   doorTotal: number;
