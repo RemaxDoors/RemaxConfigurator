@@ -63,7 +63,10 @@ export interface Quote {
   shipToCustomer: Party;
   shipToLocation: Location;
   projectName: string;
+  /** Employees.lmeEmployeeID — the quoter. */
   salesPerson: string;
+  /** MarketingPrograms.looMarketingProgramID — Quotes.uqmpMarketingProgramID. */
+  leadSource: string;
   revision: string;
   status: QuoteStatus;
   totals: QuoteTotals;

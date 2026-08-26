@@ -64,6 +64,7 @@ import {
   type ParameterUsage,
   replaceParametersInDb,
   deleteDefaultFromDb,
+  updateConfiguratorInDb,
   replaceDefaultsInDb,
   replaceRulesInDb,
   createConfigurator,
@@ -254,6 +255,14 @@ export default function ConfiguratorSetupPage() {
   // Two-step delete on a defaults row: the first click arms it, the second
   // does it. Cheaper than a dialog for a row that is one value.
   const [armedDefault, setArmedDefault] = React.useState<string | null>(null);
+  // Name and revision are edited in place next to the picker. Revision is
+  // what M1 puts in the form id — PART-{id}-REV-{revision} — so it has to be
+  // visible where the configurator is chosen, not buried in a dialog.
+  const [cfgDraft, setCfgDraft] = React.useState<{
+    name: string;
+    partRevision: string;
+  } | null>(null);
+  const [cfgSaving, setCfgSaving] = React.useState(false);
   const [pendingDelete, setPendingDelete] = React.useState<string | null>(null);
   const [deleteUsage, setDeleteUsage] = React.useState<ParameterUsage | null>(null);
   const [deleteBusy, setDeleteBusy] = React.useState(false);
@@ -615,6 +624,35 @@ export default function ConfiguratorSetupPage() {
       });
     } finally {
       setArmedDefault(null);
+    }
+  };
+
+  const saveConfigurator = async () => {
+    if (!cfgDraft || !selected) return;
+    setCfgSaving(true);
+    try {
+      const res = await updateConfiguratorInDb(configuratorId, {
+        name: cfgDraft.name,
+        // Sent even when empty: clearing the revision is a real edit, and M1
+        // has two configurators whose form ids end in "REV-".
+        partRevision: cfgDraft.partRevision,
+      });
+      setConfigurators((prev) =>
+        prev.map((c) =>
+          c.id === configuratorId
+            ? { ...c, name: cfgDraft.name, partRevision: res.partRevision }
+            : c
+        )
+      );
+      setCfgDraft(null);
+      setSaveNotice({ kind: "ok", text: `Saved. Form id: ${res.formId}` });
+    } catch (err) {
+      setSaveNotice({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Save failed.",
+      });
+    } finally {
+      setCfgSaving(false);
     }
   };
 
@@ -1036,6 +1074,20 @@ export default function ConfiguratorSetupPage() {
         {selected?.doorTypeFilter && (
           <Badge variant="secondary">Door type: {selected.doorTypeFilter}</Badge>
         )}
+        <Button
+          variant="outline"
+          onClick={() =>
+            cfgDraft
+              ? setCfgDraft(null)
+              : setCfgDraft({
+                  name: selected?.name ?? "",
+                  partRevision: selected?.partRevision ?? "",
+                })
+          }
+        >
+          <Pencil className="h-4 w-4" />
+          {cfgDraft ? "Cancel" : "Edit"}
+        </Button>
         <Button variant="ghost" className="ml-auto" asChild>
           <Link href="/configurator-setup/help">
             <HelpCircle className="h-4 w-4" />
@@ -1053,6 +1105,60 @@ export default function ConfiguratorSetupPage() {
           New configurator
         </Button>
       </div>
+
+      {cfgDraft && (
+        <div className="flex flex-wrap items-end gap-3 rounded-md border p-3">
+          <div className="space-y-1.5">
+            <label htmlFor="cfg-name" className="text-sm font-medium">
+              Configurator name
+            </label>
+            <input
+              id="cfg-name"
+              value={cfgDraft.name}
+              maxLength={50}
+              onChange={(e) =>
+                setCfgDraft({ ...cfgDraft, name: e.target.value })
+              }
+              className="flex h-10 w-72 rounded-md border border-input bg-background px-3 text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="cfg-rev" className="text-sm font-medium">
+              Revision ID
+            </label>
+            <input
+              id="cfg-rev"
+              value={cfgDraft.partRevision}
+              maxLength={5}
+              placeholder="e.g. BOM"
+              onChange={(e) =>
+                setCfgDraft({ ...cfgDraft, partRevision: e.target.value })
+              }
+              className="flex h-10 w-28 rounded-md border border-input bg-background px-3 font-mono text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <span className="block text-sm font-medium">M1 form id</span>
+            {/* Shown live, because this is the whole reason the field exists:
+                the id has to match what M1 already holds in FormInputValues. */}
+            <code className="block rounded bg-muted px-2 py-2 font-mono text-xs">
+              PART-{configuratorId}-REV-{cfgDraft.partRevision}
+            </code>
+          </div>
+          <Button onClick={saveConfigurator} disabled={cfgSaving}>
+            {cfgSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+            <Save className="h-4 w-4" />
+            Save
+          </Button>
+          <p className="w-full text-xs text-muted-foreground">
+            Revision is M1&apos;s PartRevision, max 5 characters. It can be
+            blank — curtain and installation both have an empty revision, so
+            their form ids end in <code className="font-mono">REV-</code>. The
+            configurator id itself is not editable: every rule, parameter and
+            default keys off it.
+          </p>
+        </div>
+      )}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>

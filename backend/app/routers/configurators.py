@@ -336,6 +336,43 @@ def upsert_parameter(configurator_id: str, param: ParameterIn):
         raise HTTPException(status_code=502, detail=f"Save failed: {exc}")
 
 
+class UpdateConfiguratorIn(BaseModel):
+    """Rename a configurator or change its revision.
+
+    partRevision goes into M1's form id — PART-{PartID}-REV-{revision} — and an
+    empty string is a real value, so it is Optional-with-None rather than
+    defaulting to a placeholder: None means "leave it alone", "" means "clear
+    it".
+    """
+    name: str | None = None
+    partRevision: str | None = None
+    doorType: str | None = None
+    changedBy: str | None = None
+
+
+@router.put("/configurators/{configurator_id}")
+def update_configurator(configurator_id: str, body: UpdateConfiguratorIn):
+    """Change a configurator's name, revision or door type.
+
+    PartID is not editable: rules, parameters and defaults all key off it, and
+    M1's form ids are built from it.
+    """
+    if not settings.config_db_configured():
+        raise HTTPException(status_code=503, detail="Config DB not configured.")
+    try:
+        return config_write.update_configurator(
+            configurator_id,
+            name=body.name,
+            part_revision=body.partRevision,
+            door_type=body.doorType,
+            changed_by=body.changedBy or "admin",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=502, detail=f"Save failed: {exc}")
+
+
 @router.get("/configurators/{configurator_id}/parameters/{control_name}/usage")
 def parameter_usage(configurator_id: str, control_name: str):
     """What refers to this parameter: rules, validations and defaults.

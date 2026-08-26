@@ -34,3 +34,25 @@ def list_locations(organizationId: str = Query(default="")):
         }
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"M1 query failed: {exc}")
+
+
+@router.get("/lead-sources")
+def lead_sources():
+    """Active marketing programmes, for the Lead Source dropdown."""
+    if not settings.db_configured():
+        raise HTTPException(status_code=503, detail="M1 is not configured.")
+    try:
+        return {"leadSources": m1.list_lead_sources()}
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=502, detail=f"M1 unreachable: {exc}")
+
+
+@router.get("/quoters")
+def quoters():
+    """Salespeople who can quote, for the Sales Person dropdown."""
+    if not settings.db_configured():
+        raise HTTPException(status_code=503, detail="M1 is not configured.")
+    try:
+        return {"quoters": m1.list_quoters()}
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=502, detail=f"M1 unreachable: {exc}")

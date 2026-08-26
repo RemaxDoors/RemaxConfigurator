@@ -68,3 +68,37 @@ def search_customers(query: str) -> list[dict]:
     with get_engine().connect() as conn:
         rows = conn.execute(statement, {"term": term}).fetchall()
     return [{"id": str(row[0]).strip(), "name": str(row[1]).strip()} for row in rows]
+
+
+def list_lead_sources() -> list[dict]:
+    """Active marketing programmes — the Lead Source dropdown.
+
+    Only the active ones are offered. Note that most historic quotes carry an
+    INACTIVE programme, so a quote loaded from M1 may hold a code that is not
+    in this list; the caller should keep an unknown value selectable rather
+    than silently blanking it.
+    """
+    with get_engine().connect() as conn:
+        rows = conn.execute(text(
+            "SELECT looMarketingProgramID, looShortDescription "
+            "FROM dbo.MarketingPrograms WHERE looInactive = 0 "
+            "ORDER BY looShortDescription"
+        )).fetchall()
+    return [{"id": r[0], "name": r[1] or r[0]} for r in rows]
+
+
+def list_quoters() -> list[dict]:
+    """Salespeople who can quote — the Sales Person dropdown.
+
+    lmeTerminationDate is the real leaver flag. Without it the list includes
+    people who left in 2024 and carry "- INACTIVE" in their name, which is a
+    convention rather than something to filter on.
+    """
+    with get_engine().connect() as conn:
+        rows = conn.execute(text(
+            "SELECT lmeEmployeeID, lmeEmployeeName FROM dbo.Employees "
+            "WHERE lmeQuoterEmployee = 1 AND lmeContactTitleID = 'SALE' "
+            "AND lmeTerminationDate IS NULL "
+            "ORDER BY lmeEmployeeName"
+        )).fetchall()
+    return [{"id": r[0], "name": r[1] or r[0]} for r in rows]

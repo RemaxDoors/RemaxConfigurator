@@ -10,6 +10,13 @@ import type { Part } from "@/types/part";
 export interface Door extends Part {
   /** The configurator template used, e.g. "RRD-MOVIDOR-TEMPLATE". */
   configuratorId: string;
+  /**
+   * The CONFIGURATOR's revision — uCfgConfigurators.PartRevision, not the
+   * quote's. M1 builds the form id as PART-{configuratorId}-REV-{revision},
+   * so Movidor is PART-RRD-MOVIDOR-TEMPLATE-REV-BOM. Blank is a real value:
+   * curtain and installation both carry an empty revision in M1.
+   */
+  configuratorRevision?: string;
   /** The selected parameter values (→ M1 uFormInputValues). */
   parameters: ConfiguredParameter[];
 }

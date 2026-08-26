@@ -87,6 +87,24 @@ export async function deleteParameterFromDb(
   }
 }
 
+/** Rename a configurator or change its revision. */
+export async function updateConfiguratorInDb(
+  configuratorId: string,
+  patch: { name?: string; partRevision?: string; doorType?: string },
+  changedBy?: string
+): Promise<{ formId: string; partRevision: string }> {
+  const res = await fetch("/api/config/configurator", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ configuratorId, ...patch, changedBy }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body.error || body.detail || `Save failed (${res.status})`);
+  }
+  return body as { formId: string; partRevision: string };
+}
+
 export interface NewConfigurator {
   partId: string;
   name: string;

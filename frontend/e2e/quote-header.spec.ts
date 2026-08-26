@@ -49,7 +49,7 @@ test.describe("quote header", () => {
     await page.getByRole("button", { name: /Sales checklist/ }).click();
 
     await page.getByLabel("Project Name").fill("Coles Truganina D07");
-    await page.getByLabel("Sales Person").fill("JCO");
+    await page.getByLabel("Sales Person").selectOption("JCO");
 
     // Two of four now pass, so the count drops rather than the button
     // becoming available while the customer is still unset.
@@ -58,14 +58,28 @@ test.describe("quote header", () => {
     ).toBeVisible();
   });
 
-  test("a project name over 50 characters fails the check", async ({ page }) => {
+  test("project name is capped at what M1 will hold", async ({ page }) => {
     await page.goto("/quote/new");
-    await page.getByRole("button", { name: /Sales checklist/ }).click();
 
     // uqmpProjectName is nvarchar(50) and M1 already holds values at exactly
-    // 50, so anything longer has nowhere to go.
+    // 50. The field now prevents the overrun rather than warning after the
+    // fact, so 51 characters cannot be typed in the first place.
     await page.getByLabel("Project Name").fill("x".repeat(51));
-    await expect(page.getByText(/Too long — 51 characters/)).toBeVisible();
+    await expect(page.getByLabel("Project Name")).toHaveValue("x".repeat(50));
+    await expect(page.getByText("50/50")).toBeVisible();
+
+    // The length check in buildChecklist still stands for values that arrive
+    // from somewhere other than this input — a quote loaded out of M1, say.
+    const { buildChecklist } = await import("../src/components/quote/sales-checklist");
+    const items = buildChecklist({
+      customer: { id: "C1" } as never,
+      shipToLocation: { id: "L1" } as never,
+      projectName: "x".repeat(51),
+      salesPerson: "JCO",
+    });
+    const nameCheck = items.find((i) => i.label === "Project name filled")!;
+    expect(nameCheck.ok).toBe(false);
+    expect(nameCheck.hint).toContain("51 characters");
   });
 
   test("status offers exactly the three sales statuses", async ({ page }) => {

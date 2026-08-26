@@ -51,8 +51,13 @@ def get_config_engine():
 def load_configurators() -> list[dict]:
     engine = get_config_engine()
     with engine.connect() as conn:
+        # PartRevision is the CONFIGURATOR's revision, not the quote's. M1
+        # builds the form id as PART-{PartID}-REV-{PartRevision}, so Movidor
+        # is PART-RRD-MOVIDOR-TEMPLATE-REV-BOM while curtain and installation
+        # carry a blank revision. Sending the quote revision instead produced
+        # a form id that matches nothing in FormInputValues.
         configs = conn.execute(text(
-            "SELECT CfgID, PartID, ConfiguratorName, DoorType "
+            "SELECT CfgID, PartID, ConfiguratorName, DoorType, PartRevision "
             "FROM dbo.uCfgConfigurators WHERE IsActive = 1 ORDER BY ConfiguratorName"
         )).fetchall()
         sec_expr = (
@@ -122,10 +127,13 @@ def load_configurators() -> list[dict]:
             "id": part_id,
             "name": name,
             "doorTypeFilter": door_type,
+            # Blank is a real value here, not a missing one: two of the three
+            # configurators in M1 carry an empty revision.
+            "partRevision": "" if revision is None else revision,
             "parameters": params_by.get(cfg_id, []),
             "defaults": defaults_by.get(cfg_id, []),
         }
-        for (cfg_id, part_id, name, door_type) in configs
+        for (cfg_id, part_id, name, door_type, revision) in configs
     ]
 
 

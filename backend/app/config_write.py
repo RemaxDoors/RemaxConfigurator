@@ -428,6 +428,86 @@ def delete_default(
     }
 
 
+def update_configurator(
+    configurator_id: str,
+    name: str | None = None,
+    part_revision: str | None = None,
+    door_type: str | None = None,
+    changed_by: str = "admin",
+) -> dict:
+    """Rename a configurator, or change its revision.
+
+    PartRevision is what M1 puts in the form id — PART-{PartID}-REV-{revision},
+    so the Movidor configurator is ...-REV-BOM. It is nvarchar(5) and an empty
+    string is a real value: two of the three configurators in M1 carry a blank
+    revision, and the form id ends in "REV-" for those.
+
+    PartID is deliberately NOT changeable here. It is the key every rule,
+    parameter and default hangs off, and M1's form ids are built from it, so
+    renaming one is a migration rather than an edit.
+    """
+    engine = config_repo.get_config_engine()
+    with engine.begin() as conn:
+        cfg_id = _cfg_id(conn, configurator_id)
+        if cfg_id is None:
+            raise ValueError(f"Configurator '{configurator_id}' not found")
+
+        before = conn.execute(text(
+            "SELECT ConfiguratorName, PartRevision, DoorType "
+            "FROM dbo.uCfgConfigurators WHERE CfgID = :c"
+        ), {"c": cfg_id}).fetchone()
+
+        sets, params = [], {"c": cfg_id}
+        if name is not None and name.strip():
+            sets.append("ConfiguratorName = :n")
+            params["n"] = name.strip()[:50]
+        if part_revision is not None:
+            # Not `if part_revision:` — clearing the revision to blank is a
+            # legitimate edit, and the falsy check would silently ignore it.
+            rev = part_revision.strip()
+            if len(rev) > 5:
+                raise ValueError(
+                    f"Revision '{rev}' is {len(rev)} characters; "
+                    "M1 allows 5 (PartRevision is nvarchar(5))."
+                )
+            sets.append("PartRevision = :r")
+            params["r"] = rev
+        if door_type is not None:
+            sets.append("DoorType = :d")
+            params["d"] = door_type.strip()[:10] or None
+        if not sets:
+            return {"changed": False}
+
+        if config_repo.column_exists(conn, "uCfgConfigurators", "ModifiedBy"):
+            sets.append("ModifiedDate = GETDATE()")
+            sets.append("ModifiedBy = :by")
+            params["by"] = changed_by
+
+        conn.execute(text(
+            f"UPDATE dbo.uCfgConfigurators SET {', '.join(sets)} WHERE CfgID = :c"
+        ), params)
+
+        after = conn.execute(text(
+            "SELECT ConfiguratorName, PartRevision, DoorType "
+            "FROM dbo.uCfgConfigurators WHERE CfgID = :c"
+        ), {"c": cfg_id}).fetchone()
+
+    _log_change(
+        engine, "uCfgConfigurators", configurator_id, "UPDATE",
+        {"name": before[0], "partRevision": before[1], "doorType": before[2]},
+        {"name": after[0], "partRevision": after[1], "doorType": after[2]},
+        changed_by,
+    )
+    return {
+        "changed": True,
+        "id": configurator_id,
+        "name": after[0],
+        "partRevision": "" if after[1] is None else after[1],
+        "doorType": after[2],
+        "formId": f"PART-{configurator_id}-REV-{after[1] or ''}",
+    }
+
+
 def create_configurator(
     part_id: str,
     name: str,

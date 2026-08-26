@@ -82,6 +82,12 @@ export interface Configurator {
   name: string;
   /** LINE_DOOR_TYPE this configurator applies to, e.g. "RRD". */
   doorTypeFilter?: string;
+  /**
+   * uCfgConfigurators.PartRevision — what M1 puts in the form id,
+   * PART-{id}-REV-{partRevision}. Movidor is "BOM"; curtain and installation
+   * are blank, so their ids end in "REV-". nvarchar(5) in M1.
+   */
+  partRevision?: string;
   parameters: ConfiguratorParameter[];
   /** Model-driven default selections (from uCfgDefaults). */
   defaults?: ConfiguratorDefault[];

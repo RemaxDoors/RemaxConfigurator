@@ -16,6 +16,8 @@ import { Badge } from "@/components/ui/badge";
 import { CustomerPicker } from "@/components/quote/customer-picker";
 import { QuoteHeader } from "@/components/quote/quote-header";
 import { QuoteLines } from "@/components/quote/quote-lines";
+import { SqlPreview } from "@/components/quote/sql-preview";
+import type { SqlSection } from "@/lib/quote-sql";
 import {
   SalesChecklist,
   buildChecklist,
@@ -44,6 +46,7 @@ function makeQuote(quoteId: string, isNew: boolean): Quote {
     shipToLocation: EMPTY_LOCATION,
     projectName: "",
     salesPerson: "",
+    leadSource: "",
     revision: "A",
     status: "Quote In Progress",
     totals: {
@@ -85,6 +88,33 @@ export default function QuotePage({ params }: { params: { id: string } }) {
     setQuote((prev) => ({ ...prev, ...patch }));
 
   const [checklistDone, setChecklistDone] = React.useState(false);
+  // The SQL screen replaces the quote body rather than sitting under it: it is
+  // a review step, and Return to Quote is how you get back.
+  const [showSql, setShowSql] = React.useState(false);
+  // Held here rather than inside SqlPreview: that component unmounts on Return
+  // to Quote, so keeping the sections there threw away any hand edits the
+  // moment someone went back to correct a value.
+  const [sqlSections, setSqlSections] =
+    React.useState<SqlSection[] | null>(null);
+  const [sqlBuiltFrom, setSqlBuiltFrom] = React.useState<string | null>(null);
+
+  // What the generated SQL depends on. Comparing this to the fingerprint taken
+  // at generation time is how the screen knows the statements are out of date.
+  const sqlFingerprint = React.useMemo(
+    () =>
+      JSON.stringify({
+        id: quote.quoteId,
+        project: quote.projectName,
+        sales: quote.salesPerson,
+        lead: quote.leadSource,
+        rev: quote.revision,
+        cust: quote.customer?.id,
+        shipOrg: quote.shipToCustomer?.id,
+        shipLoc: quote.shipToLocation?.id,
+        lines: quote.lines,
+      }),
+    [quote]
+  );
 
   const checklist = React.useMemo(
     () =>
@@ -318,15 +348,34 @@ export default function QuotePage({ params }: { params: { id: string } }) {
           if (quote.status === "Quote In Progress") {
             patchQuote({ status: "Quote Sent to Customer" });
           }
+          // Generates SQL for review only. Nothing is written to M1 here or
+          // anywhere else in this flow.
+          setShowSql(true);
         }}
       />
 
+      {showSql ? (
+        <SqlPreview
+          quote={quote}
+          sections={sqlSections}
+          onSectionsChange={(next) => {
+            setSqlSections(next);
+            // Only a fresh build resets the fingerprint; editing the text does
+            // not make stale SQL current again.
+            if (next && !sqlSections) setSqlBuiltFrom(sqlFingerprint);
+          }}
+          stale={sqlBuiltFrom !== null && sqlBuiltFrom !== sqlFingerprint}
+          onReturn={() => setShowSql(false)}
+        />
+      ) : (
+      <>
       <QuoteHeader
         customer={quote.customer}
         shipToCustomer={quote.shipToCustomer}
         shipToLocation={quote.shipToLocation}
         projectName={quote.projectName}
         salesPerson={quote.salesPerson}
+        leadSource={quote.leadSource}
         revision={quote.revision}
         onChange={patchQuote}
         onOpenPicker={() => setPickerOpen(true)}
@@ -367,6 +416,9 @@ export default function QuotePage({ params }: { params: { id: string } }) {
           onDelete={handleDelete}
           onUpdateLine={handleUpdateLine}
         />
+      )}
+
+      </>
       )}
 
       <NewLineDialog

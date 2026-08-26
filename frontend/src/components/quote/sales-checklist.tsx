@@ -86,21 +86,33 @@ export function SalesChecklist({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
+        {/* Never disabled, and never a dead end.
+    
+            An earlier version switched to the outline variant once complete
+            and made the click a no-op toggle, so after generating the SQL and
+            returning to the quote the button looked greyed out and could not
+            take you back — the only way to reach the SQL again was to break a
+            field and fix it. Whenever the checklist passes, this button goes
+            to the SQL; only an incomplete checklist opens the list instead. */}
         <Button
-          variant={completed ? "outline" : "default"}
+          variant="default"
           size="sm"
-          onClick={() => (allOk && !completed ? onComplete() : setOpen(!open))}
-          // Never disabled: a greyed-out button that will not say why is the
-          // thing this checklist exists to avoid. Pressing it opens the list.
-          aria-expanded={open}
+          onClick={() => (allOk ? onComplete() : setOpen(!open))}
+          aria-expanded={allOk ? undefined : open}
         >
           <ClipboardCheck className="h-4 w-4" />
-          {completed
-            ? "Sales checklist complete"
-            : allOk
-              ? "Mark sales checklist complete"
-              : `Sales checklist — ${outstanding.length} outstanding`}
+          {allOk
+            ? completed
+              ? "View SQL"
+              : "Sales Checklist Complete"
+            : `Sales checklist — ${outstanding.length} outstanding`}
         </Button>
+        {completed && allOk && (
+          <span className="flex items-center gap-1 text-xs text-success">
+            <Check className="h-3.5 w-3.5" />
+            checklist complete
+          </span>
+        )}
         {!allOk && (
           <button
             type="button"

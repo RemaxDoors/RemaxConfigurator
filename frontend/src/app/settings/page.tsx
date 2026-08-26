@@ -28,7 +28,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useTheme } from "@/components/theme/theme-provider";
-import { M1FieldMapping } from "@/components/settings/m1-field-mapping";
 import { cn } from "@/lib/utils";
 import { CONFIGURATOR_SETUP_HREF } from "@/lib/navigation";
 import type { Theme } from "@/lib/theme";
@@ -146,8 +145,12 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* M1 field mapping */}
-      <M1FieldMapping />
+      {/* The per-table mapping cards were removed: they baked provisional
+          guesses at the M1 dictionary into the UI, so every change to the
+          dictionary meant a change to the app. The quote screen now generates
+          editable SQL instead — the mapping is text you edit, not components.
+          m1-field-mapping.tsx is left in the tree, unused, pending a decision
+          on whether to delete it. */}
     </div>
   );
 }
