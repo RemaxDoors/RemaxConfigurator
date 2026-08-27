@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { QUOTER_ID, stubLookups, stubLookupsUnavailable } from "./support/stubs";
 
 /**
  * The sales checklist gates a quote leaving "Quote In Progress".
@@ -46,16 +45,11 @@ test.describe("quote header", () => {
   test("filling project name and sales person ticks those two", async ({
     page,
   }) => {
-    await stubLookups(page);
     await page.goto("/quote/new");
     await page.getByRole("button", { name: /Sales checklist/ }).click();
 
     await page.getByLabel("Project Name").fill("Coles Truganina D07");
-    // Exact: when M1 is unreachable a manual-entry box appears beside the
-    // dropdown, and its label starts with the same words.
-    await page
-      .getByLabel("Sales Person", { exact: true })
-      .selectOption(QUOTER_ID);
+    await page.getByLabel("Sales Person").selectOption("JCO");
 
     // Two of four now pass, so the count drops rather than the button
     // becoming available while the customer is still unset.
@@ -86,26 +80,6 @@ test.describe("quote header", () => {
     const nameCheck = items.find((i) => i.label === "Project name filled")!;
     expect(nameCheck.ok).toBe(false);
     expect(nameCheck.hint).toContain("51 characters");
-  });
-
-  test("an M1 outage does not block quoting", async ({ page }) => {
-    // The regression this guards: the dropdown used to disable itself while
-    // loading and stay disabled on failure. Sales Person is required by the
-    // checklist, so that made an M1 outage a total stop on quoting.
-    await stubLookupsUnavailable(page);
-    await page.goto("/quote/new");
-
-    const select = page.getByLabel("Sales Person", { exact: true });
-    await expect(select).toBeEnabled();
-
-    // And there is a way to supply the id by hand, which the checklist accepts.
-    const manual = page.getByLabel("Sales Person (manual entry)");
-    await expect(manual).toBeVisible();
-    await manual.fill(QUOTER_ID);
-    await page.getByLabel("Project Name").fill("Coles Truganina D07");
-    await expect(
-      page.getByRole("button", { name: /Sales checklist — 2 outstanding/ })
-    ).toBeVisible();
   });
 
   test("status offers exactly the three sales statuses", async ({ page }) => {

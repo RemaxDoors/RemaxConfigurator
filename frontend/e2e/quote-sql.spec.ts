@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { QUOTER_ID, stubLookups } from "./support/stubs";
 
 /**
  * The SQL preview is a DRY RUN. These tests exist mostly to keep it that way:
@@ -7,12 +6,9 @@ import { QUOTER_ID, stubLookups } from "./support/stubs";
  */
 test.describe("SQL preview", () => {
   const fillChecklist = async (page: import("@playwright/test").Page) => {
-    await stubLookups(page);
     await page.goto("/quote/new");
     await page.getByLabel("Project Name").fill("Coles Truganina D07");
-    await page
-      .getByLabel("Sales Person", { exact: true })
-      .selectOption(QUOTER_ID);
+    await page.getByLabel("Sales Person").selectOption("JCO");
   };
 
   test("completing the checklist opens the SQL screen", async ({ page }) => {
@@ -158,12 +154,9 @@ test.describe("generated SQL content", () => {
  */
 test.describe("returning to the quote", () => {
   const complete = async (page: import("@playwright/test").Page) => {
-    await stubLookups(page);
     await page.goto("/quote/new");
     await page.getByLabel("Project Name").fill("Coles Truganina D07");
-    await page
-      .getByLabel("Sales Person", { exact: true })
-      .selectOption(QUOTER_ID);
+    await page.getByLabel("Sales Person").selectOption("JCO");
   };
 
   test("the button stays usable after generating and going back", async ({
