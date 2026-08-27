@@ -86,7 +86,15 @@ jobs:
           # API would make the suite depend on a VNet the runner has no access
           # to, and would run assertions against live pricing configuration.
           CI: "true"
-        run: npx playwright test
+        # --tsconfig is not optional here. By default Playwright looks up a
+        # tsconfig per imported file by walking up from that file's folder,
+        # and on the runner that walk did not find frontend/tsconfig.json for
+        # files under src/ -- so the "@/..." path alias stopped resolving and
+        # eighteen tests died on "Cannot find module '@/types/door'" while
+        # passing on Windows. Naming one tsconfig for every imported file
+        # removes the lookup, and with it the difference between the two
+        # machines.
+        run: npx playwright test --tsconfig=tsconfig.json
 
       - name: Keep the report when something fails
         if: failure()
