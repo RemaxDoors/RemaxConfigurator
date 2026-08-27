@@ -105,14 +105,29 @@ function buildQuoteLines(quote: Quote): SqlSection {
       (p) => p.controlName?.toUpperCase() === "CMBDOORMODEL"
     )?.value;
 
+    // Agreed prices that differ from M1's list, as JSON keyed by part id.
+    // Emitted only when something was actually overridden, so a line quoted at
+    // list price does not carry an empty object that reads as "we looked and
+    // there was nothing" versus "nobody looked".
+    const overrides = line.upgradeOverridePrices;
+    const overrideJson =
+      overrides && Object.keys(overrides).length
+        ? JSON.stringify(overrides)
+        : null;
+
+    const tail: string[] = [];
+    if (model) tail.push(`       uqmlDoorModelID         = ${lit(model)}`);
+    if (overrideJson)
+      tail.push(`       uqmlUpgradeOverridePrices = ${lit(overrideJson)}`);
+
     out.push(
       "UPDATE dbo.QuoteLines",
       `SET    qmlPartID               = ${lit(item.partId)},`,
       `       qmlPartRevisionID       = ${lit(item.partRevision)},`,
       `       qmlPartShortDescription = ${lit(item.partDescription)}${
-        model ? "," : ""
+        tail.length ? "," : ""
       }`,
-      ...(model ? [`       uqmlDoorModelID         = ${lit(model)}`] : []),
+      ...tail.map((l, n) => (n < tail.length - 1 ? `${l},` : l)),
       "WHERE  qmlQuoteID = @QuoteID",
       `  AND  qmlQuoteLineID = ${Number(line.quoteLineId) || 0};`
     );

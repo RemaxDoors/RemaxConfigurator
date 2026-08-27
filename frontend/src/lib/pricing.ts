@@ -1,4 +1,4 @@
-import type { PriceBreakdown } from "@/types/pricing";
+import type { PriceBreakdown, UpgradeOverride } from "@/types/pricing";
 
 export interface CurtainPrice {
   curtainModel: string;
@@ -28,13 +28,19 @@ export async function fetchCurtainPrice(
 /** Fetch the priced breakdown (door + upgrades + installation) from M1. */
 export async function fetchPrice(
   configuratorId: string,
-  values: Record<string, string>
+  values: Record<string, string>,
+  /**
+   * Negotiated unit prices, keyed by part id. Sent alongside `values` rather
+   * than inside it: `values` is configurator state bound for FormInputValues,
+   * and pricing does not belong there.
+   */
+  overrides?: Record<string, UpgradeOverride>
 ): Promise<PriceBreakdown | null> {
   try {
     const res = await fetch("/api/price", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ configuratorId, values }),
+      body: JSON.stringify({ configuratorId, values, overrides }),
     });
     if (!res.ok) return null;
     return (await res.json()) as PriceBreakdown;

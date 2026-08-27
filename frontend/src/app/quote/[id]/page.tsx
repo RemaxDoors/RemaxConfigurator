@@ -29,7 +29,7 @@ import {
 import { ConfiguratorForm } from "@/components/quote/configurator-form";
 import type { ExtensionPanel } from "@/components/quote/extension-screen";
 import type { ValidationResult } from "@/lib/validate";
-import type { PriceBreakdown } from "@/types/pricing";
+import type { PriceBreakdown, UpgradeOverride } from "@/types/pricing";
 import { isDoor } from "@/types/door";
 import type { Location, Party } from "@/types/customer";
 import { QUOTE_STATUSES } from "@/types/quote";
@@ -258,7 +258,8 @@ export default function QuotePage({ params }: { params: { id: string } }) {
   const handleConfigComplete = (
     values: Record<string, string>,
     result: ValidationResult,
-    pricing: PriceBreakdown | null
+    pricing: PriceBreakdown | null,
+    overrides: Record<string, UpgradeOverride>
   ) => {
     if (!configuring) return;
     setLines((lines) =>
@@ -278,6 +279,12 @@ export default function QuotePage({ params }: { params: { id: string } }) {
           // line.marginPercent is a fraction (percent() multiplies by 100)
           marginPercent: pricing ? pricing.marginPercent / 100 : l.marginPercent,
           breakdown: pricing ?? l.breakdown,
+          // Kept on the line so reopening it reprices at the agreed figures
+          // rather than snapping back to M1 list. Written to
+          // QuoteLines.uqmlUpgradeOverridePrices by the SQL generator.
+          upgradeOverridePrices: Object.keys(overrides).length
+            ? overrides
+            : undefined,
         };
       })
     );
@@ -402,6 +409,10 @@ export default function QuotePage({ params }: { params: { id: string } }) {
           initialValues={configuring.initialValues}
           extensions={configuring.extensions}
           onCancel={() => setConfiguring(null)}
+          initialOverrides={
+            quote.lines.find((l) => l.quoteLineId === configuring.lineId)
+              ?.upgradeOverridePrices
+          }
           onComplete={handleConfigComplete}
         />
       ) : (

@@ -1,7 +1,7 @@
 import type { Party, Location } from "@/types/customer";
 import type { Door } from "@/types/door";
 import type { Part } from "@/types/part";
-import type { PriceBreakdown } from "@/types/pricing";
+import type { PriceBreakdown, UpgradeOverride } from "@/types/pricing";
 
 /**
  * Where a quote is in the sales process.
@@ -52,6 +52,17 @@ export interface QuoteLine {
   marginPercent: number;
   /** Full M1 price breakdown (door + upgrades + installation), for the expandable view. */
   breakdown?: PriceBreakdown;
+  /**
+   * Negotiated unit prices for this line's upgrade parts, keyed by part id.
+   *
+   * Written by the app, never typed into by hand — the price boxes on the
+   * configurator summary are the only way in. Read back on reload and applied
+   * over M1's list price, so a quote reopened next month still carries the
+   * price that was agreed rather than repricing itself.
+   *
+   * Destined for QuoteLines.uqmlUpgradeOverridePrices once that column exists.
+   */
+  upgradeOverridePrices?: Record<string, UpgradeOverride>;
 }
 
 /**

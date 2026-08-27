@@ -26,6 +26,13 @@ import {
   type ManualDefault,
 } from "@/lib/configurator-links";
 import { ConfiguratorSidebar, type SidebarItem } from "@/components/quote/configurator-sidebar";
+import { cn } from "@/lib/utils";
+import {
+  SHOW_UPGRADE_OVERRIDE_FIELD,
+  readPref,
+  subscribePref,
+} from "@/lib/ui-prefs";
+import type { AttributedPart, UpgradeOverride } from "@/types/pricing";
 import { ExtensionScreen, type ExtensionPanel } from "@/components/quote/extension-screen";
 import { validateConfiguration, type ValidationResult } from "@/lib/validate";
 import type { Configurator, ConfiguratorParameter } from "@/types/configurator";
@@ -43,10 +50,13 @@ interface ConfiguratorFormProps {
   /** Sub-configurators selected for this line (curtain / installation). */
   extensions?: ExtensionPanel[];
   onCancel: () => void;
+  /** Agreed prices carried back in when an existing line is reopened. */
+  initialOverrides?: Record<string, UpgradeOverride>;
   onComplete: (
     values: Record<string, string>,
     result: ValidationResult,
-    pricing: PriceBreakdown | null
+    pricing: PriceBreakdown | null,
+    overrides: Record<string, UpgradeOverride>
   ) => void;
 }
 
@@ -101,6 +111,7 @@ export function ConfiguratorForm({
   initialValues,
   extensions = [],
   onCancel,
+  initialOverrides,
   onComplete,
 }: ConfiguratorFormProps) {
   const [configurator, setConfigurator] = React.useState<Configurator | null>(
@@ -119,6 +130,33 @@ export function ConfiguratorForm({
   const [screen, setScreen] = React.useState("");
   const [pricing, setPricing] = React.useState<PriceBreakdown | null>(null);
   const [pricingLoading, setPricingLoading] = React.useState(false);
+  // Agreed prices live here, NOT in `values`: that dictionary is configurator
+  // state bound for FormInputValues, and pricing in it would mean everything
+  // reading configurator values has to learn to skip the rows that are not.
+  const [overrides, setOverrides] = React.useState<
+    Record<string, UpgradeOverride>
+  >(initialOverrides ?? {});
+
+  const setOverride = React.useCallback(
+    (partId: string, unitPrice: string | null, meta?: Partial<UpgradeOverride>) => {
+      const key = partId.toUpperCase();
+      setOverrides((prev) => {
+        const next = { ...prev };
+        // Clearing removes the override rather than pricing the part at zero:
+        // "" and 0 are different intentions, and a blank box reading as free
+        // would be an expensive misunderstanding.
+        if (unitPrice === null || unitPrice.trim() === "") delete next[key];
+        else
+          next[key] = {
+            ...prev[key],
+            ...meta,
+            unitPrice: Number(unitPrice),
+          };
+        return next;
+      });
+    },
+    []
+  );
 
   React.useEffect(() => {
     setScreen("");
@@ -240,11 +278,12 @@ export function ConfiguratorForm({
       // Validate + fetch a fresh price together so the saved line carries pricing.
       const [res, price] = await Promise.all([
         validateConfiguration(configuratorId, values),
-        fetchPrice(configuratorId, values),
+        fetchPrice(configuratorId, values, overrides),
       ]);
       setResult(res);
       if (price) setPricing(price);
-      if (res.errors.length === 0) onComplete(values, res, price ?? pricing);
+      if (res.errors.length === 0)
+        onComplete(values, res, price ?? pricing, overrides);
     } finally {
       setValidating(false);
     }
@@ -339,18 +378,19 @@ export function ConfiguratorForm({
 
   // Price from M1 whenever the summary is shown (and refresh if values changed).
   const priceKey = JSON.stringify(values);
+  const overrideKey = JSON.stringify(overrides);
   React.useEffect(() => {
     if (!isSummary) return;
     let active = true;
     setPricingLoading(true);
-    fetchPrice(configuratorId, values)
+    fetchPrice(configuratorId, values, overrides)
       .then((p) => active && setPricing(p))
       .finally(() => active && setPricingLoading(false));
     return () => {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSummary, priceKey, configuratorId]);
+  }, [isSummary, priceKey, overrideKey, configuratorId]);
 
   const isDoor = visibleParams.some((p) => p.controlName === "NUMDOORWIDTH");
   const showControl = ["CMBACT1", "CMBACT2", "CMBACT3", "CMBACT4", "CMBRADAR1", "CMBRADAR2"].some(
@@ -420,24 +460,17 @@ export function ConfiguratorForm({
                       <SummaryStat label="Qty" value={values.QTY || "1"} />
                     </div>
                     <div>
-                      <p className="mb-1.5 text-sm font-medium">Selected options</p>
-                      <div className="divide-y rounded-md border">
-                        {selectedOptions.length === 0 ? (
-                          <p className="px-3 py-2 text-sm text-muted-foreground">
-                            No upgrades selected.
-                          </p>
-                        ) : (
-                          selectedOptions.map((o) => (
-                            <div
-                              key={o.controlName}
-                              className="flex justify-between gap-3 px-3 py-1.5 text-sm"
-                            >
-                              <span className="text-muted-foreground">{o.label}</span>
-                              <span className="text-right font-medium">{o.display}</span>
-                            </div>
-                          ))
-                        )}
+                      <div className="mb-1.5 flex items-baseline justify-between">
+                        <p className="text-sm font-medium">Selected options</p>
+                        <p className="text-xs text-muted-foreground">
+                          Prices are per unit — type to agree a different one
+                        </p>
                       </div>
+                      <SelectedOptionsTable
+                        options={selectedOptions}
+                        pricing={pricing}
+                        onOverride={setOverride}
+                      />
                     </div>
 
                     <PriceSummary
@@ -445,7 +478,10 @@ export function ConfiguratorForm({
                       loading={pricingLoading}
                       values={values}
                       onChange={setValue}
+                      onOverride={setOverride}
                     />
+
+                    <UpgradeOverrideField overrides={overrides} />
 
                     {result && (
                       <div className="space-y-2">
@@ -524,25 +560,40 @@ export function ConfiguratorForm({
                           </h3>
                         )}
                         <div className="grid gap-4 sm:grid-cols-2">
-                          {group.params.map((param) => (
+                          {group.params.map((param) => {
+                            const charge =
+                              pricing?.upgradeAttribution?.byControl?.[
+                                param.controlName.toUpperCase()
+                              ];
+                            return (
                             <div
                               key={param.controlName}
-                              className={
+                              className={cn(
                                 param.kind === "checkbox"
                                   ? "flex items-center justify-between gap-2 rounded-md border px-3 py-2"
-                                  : "space-y-1.5"
-                              }
+                                  : "space-y-1.5",
+                                // The whole field is tinted, not just the
+                                // label: on a screen of forty controls the
+                                // eye finds a block of colour long before it
+                                // finds a badge.
+                                charge &&
+                                  (param.kind === "checkbox"
+                                    ? "border-emerald-500/60 bg-emerald-500/5"
+                                    : "-mx-2 rounded-md border border-emerald-500/60 bg-emerald-500/5 px-2 py-2")
+                              )}
                             >
-                              <Label className="flex items-center gap-1">
+                              <Label className="flex flex-wrap items-center gap-1">
                                 {param.label}
                                 {param.required && <span className="text-destructive">*</span>}
+                                {charge && <UpgradeBadge charge={charge} />}
                               </Label>
                               {renderField(param)}
                               {param.helpText && param.kind !== "checkbox" && (
                                 <p className="text-xs text-muted-foreground">{param.helpText}</p>
                               )}
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
@@ -615,6 +666,49 @@ export function ConfiguratorForm({
   );
 }
 
+/**
+ * What this selection added to the price, next to the control that added it.
+ *
+ * The figure is the whole charge the control is responsible for, not a share
+ * of it: a part triggered by two controls shows its full price against both,
+ * because "what does this option cost" is the question being answered. That is
+ * also why these are never summed on screen — the total lives in the price
+ * breakdown, which counts each part once.
+ */
+function UpgradeBadge({
+  charge,
+}: {
+  charge: { amount: number; parts: AttributedPart[] };
+}) {
+  const credit = charge.amount < 0;
+  const money = `${credit ? "−" : "+"}$${Math.abs(charge.amount).toLocaleString(
+    undefined,
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+  )}`;
+  return (
+    <span
+      className={cn(
+        "rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums",
+        credit
+          ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+          : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+      )}
+      // The parts are the evidence. Without them the number is a claim the
+      // salesperson has no way to check while they are on the phone.
+      title={charge.parts
+        .map(
+          (p) =>
+            `${p.partId} × ${p.qty} — $${p.amount.toFixed(2)}${
+              p.description ? ` (${p.description})` : ""
+            }`
+        )
+        .join("\n")}
+    >
+      {money}
+    </span>
+  );
+}
+
 function SummaryStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md bg-muted/40 px-3 py-2">
@@ -627,16 +721,193 @@ function SummaryStat({ label, value }: { label: string; value: string }) {
 const money = (n: number) =>
   `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+/**
+ * The stored field, exactly as it will reach M1.
+ *
+ * Read-only on purpose: the price boxes above are the only way to change an
+ * override, and a textarea people can type into is a data-corruption route
+ * with no error message. This is here so the value can be checked against
+ * QuoteLines while the column is still being agreed.
+ *
+ * Hidden by default and switched on from Configurator Setup, because most days
+ * nobody needs to see it.
+ */
+function UpgradeOverrideField({
+  overrides,
+}: {
+  overrides: Record<string, UpgradeOverride>;
+}) {
+  const [show, setShow] = React.useState(false);
+
+  React.useEffect(() => {
+    setShow(readPref(SHOW_UPGRADE_OVERRIDE_FIELD, false));
+    return subscribePref(SHOW_UPGRADE_OVERRIDE_FIELD, setShow);
+  }, []);
+
+  if (!show) return null;
+  const count = Object.keys(overrides).length;
+
+  return (
+    <div className="space-y-1.5 rounded-md border border-dashed p-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="font-mono text-xs font-medium">
+          uqmlUpgradeOverridePrices
+        </p>
+        <span className="text-xs text-muted-foreground">
+          read-only · {count === 0 ? "not set" : `${count} part${count === 1 ? "" : "s"}`}
+        </span>
+      </div>
+      <pre className="max-h-40 overflow-auto rounded bg-muted/50 p-2 text-[11px] leading-relaxed">
+        {count === 0 ? "NULL" : JSON.stringify(overrides, null, 2)}
+      </pre>
+      <p className="text-xs text-muted-foreground">
+        Written to the quote line. Edit the prices above to change it.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The selected options, with what each one costs and a way to change it.
+ *
+ * The price comes from upgradeAttribution, so a row only shows a figure when a
+ * rule actually charged for that selection — "Std ABS IP54" and the like carry
+ * no charge and are left blank rather than showing $0.00, which would read as
+ * a free upgrade rather than as no upgrade.
+ *
+ * Where one selection triggers several parts each part gets its own editable
+ * row underneath, because there is no sensible way to spread one typed figure
+ * across three parts and guessing would put a price nobody agreed on the quote.
+ */
+function SelectedOptionsTable({
+  options,
+  pricing,
+  onOverride,
+}: {
+  options: { controlName: string; label: string; display: string }[];
+  pricing: PriceBreakdown | null;
+  onOverride: (
+    partId: string,
+    unitPrice: string | null,
+    meta?: Partial<UpgradeOverride>
+  ) => void;
+}) {
+  const byControl = pricing?.upgradeAttribution?.byControl ?? {};
+
+  return (
+    <div className="divide-y rounded-md border">
+      {options.length === 0 ? (
+        <p className="px-3 py-2 text-sm text-muted-foreground">
+          No upgrades selected.
+        </p>
+      ) : (
+        options.map((o) => {
+          const charge = byControl[o.controlName.toUpperCase()];
+          const parts = charge?.parts ?? [];
+          const single = parts.length === 1 ? parts[0] : null;
+          const credit = (charge?.amount ?? 0) < 0;
+
+          return (
+            <div key={o.controlName} className="px-3 py-1.5 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                  {o.label}
+                </span>
+                <span className="truncate text-right font-medium">
+                  {o.display}
+                </span>
+
+                {single ? (
+                  <PriceOverrideInput
+                    partId={single.partId}
+                    unitSell={
+                      single.unitSell ?? Math.abs(single.amount) / (single.qty || 1)
+                    }
+                    listUnitSell={single.listUnitSell}
+                    overridden={single.overridden}
+                    onSet={(partId, v) =>
+                      onOverride(partId, v, {
+                        listUnitPrice: single.listUnitSell,
+                        parameter: o.controlName,
+                        label: o.label,
+                      })
+                    }
+                  />
+                ) : (
+                  <span
+                    className={cn(
+                      "w-24 shrink-0 text-right text-sm tabular-nums",
+                      charge
+                        ? credit
+                          ? "font-semibold text-sky-700 dark:text-sky-300"
+                          : "font-semibold text-emerald-700 dark:text-emerald-300"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {charge ? money(charge.amount) : "—"}
+                  </span>
+                )}
+              </div>
+
+              {/* Several parts from one selection: each priced on its own row,
+                  so the figures stay editable and add up to the total above. */}
+              {parts.length > 1 && (
+                <div className="mt-1 space-y-0.5 pl-4">
+                  {parts.map((p, i) => (
+                    <div
+                      key={`${p.partId}-${i}`}
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      <span className="w-32 shrink-0 truncate font-mono text-muted-foreground">
+                        {p.partId}
+                      </span>
+                      <span className="flex-1 truncate text-muted-foreground">
+                        {p.description}
+                      </span>
+                      <span className="w-8 text-right text-muted-foreground">
+                        ×{p.qty}
+                      </span>
+                      <PriceOverrideInput
+                        partId={p.partId}
+                        unitSell={p.unitSell ?? Math.abs(p.amount) / (p.qty || 1)}
+                        listUnitSell={p.listUnitSell}
+                        overridden={p.overridden}
+                        onSet={(partId, v) =>
+                          onOverride(partId, v, {
+                            listUnitPrice: p.listUnitSell,
+                            parameter: o.controlName,
+                            label: o.label,
+                          })
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 function PriceSummary({
   pricing,
   loading,
   values,
   onChange,
+  onOverride,
 }: {
   pricing: PriceBreakdown | null;
   loading: boolean;
   values: Record<string, string>;
   onChange: (control: string, value: string) => void;
+  onOverride: (
+    partId: string,
+    unitPrice: string | null,
+    meta?: Partial<UpgradeOverride>
+  ) => void;
 }) {
   if (loading && !pricing) {
     return (
@@ -688,6 +959,17 @@ function PriceSummary({
     pricing.miscExtraCost ?? 0,
     "add",
   ]);
+  // Only once it is actually set. A permanent "Reseller discount $0.00" row on
+  // every direct-sale quote is noise, and this one comes off the total rather
+  // than adding to it, so it reads as a subtraction.
+  if (pricing.resellerDiscountPercent) {
+    rows.push([
+      `Reseller discount (${pricing.resellerDiscountPercent}%)`,
+      pricing.resellerDiscountAmount ?? 0,
+      0,
+      "sub",
+    ]);
+  }
 
   return (
     <div className="space-y-3 rounded-md border p-3">
@@ -724,7 +1006,9 @@ function PriceSummary({
       {/* Where each of those figures comes from. It used to be visible only by
           expanding the line on the quote screen, which meant the summary could
           show "Assembly Upgrades $4,055.76" with no way to ask what for. */}
-      <UpgradeDetail pricing={pricing} />
+      <UpgradeDetail pricing={pricing} onOverride={onOverride} />
+
+      <ResellerDiscountField values={values} onChange={onChange} />
 
       <MiscExtraFields values={values} onChange={onChange} />
 
@@ -743,6 +1027,71 @@ function PriceSummary({
           Unit sell {money(pricing.unitSell)} × {pricing.qty}.
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Reseller discount, editable on the summary.
+ *
+ * It already existed on the quote line and was already written to
+ * uqmqResellerDiscount — but nothing ever subtracted it, so a reseller was
+ * quoted list price and the number on screen was decoration. Setting it here
+ * means the figure the salesperson agrees is the figure that gets quoted.
+ *
+ * Cost is untouched: what the door costs does not depend on who buys it. The
+ * margin below the fold recalculates, which is the point — a 30% discount that
+ * takes the margin to 4% should say so before the quote goes out.
+ */
+function ResellerDiscountField({
+  values,
+  onChange,
+}: {
+  values: Record<string, string>;
+  onChange: (control: string, value: string) => void;
+}) {
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const value = draft ?? (values.NUMRESELLERDISCOUNT || "");
+
+  const commit = () => {
+    if (draft === null) return;
+    const n = Number(draft);
+    // Out of range or not a number falls back to no discount rather than
+    // being clamped silently to 100% off.
+    const safe =
+      draft.trim() === "" || Number.isNaN(n) || n < 0 || n > 100
+        ? ""
+        : String(n);
+    onChange("NUMRESELLERDISCOUNT", safe);
+    setDraft(null);
+  };
+
+  return (
+    <div className="flex items-center gap-2 border-t pt-2">
+      <label htmlFor="reseller-discount" className="flex-1 text-xs text-muted-foreground">
+        Reseller discount
+      </label>
+      <div className="relative w-24">
+        <Input
+          id="reseller-discount"
+          type="number"
+          min={0}
+          max={100}
+          step={0.5}
+          value={value}
+          placeholder="0"
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            if (e.key === "Escape") setDraft(null);
+          }}
+          className="h-8 pr-6 text-right text-sm tabular-nums"
+        />
+        <span className="pointer-events-none absolute right-2 top-1.5 text-xs text-muted-foreground">
+          %
+        </span>
+      </div>
     </div>
   );
 }
@@ -828,7 +1177,85 @@ const DETAIL_GROUPS: { key: string; label: string; negative?: boolean }[] = [
 ];
 
 /** Every part behind the totals above — qty, sell and cost for each. */
-function UpgradeDetail({ pricing }: { pricing: PriceBreakdown }) {
+/**
+ * One part's agreed unit price.
+ *
+ * Commits on blur or Enter, not on keystroke: the pricing effect keys on the
+ * values dictionary, so writing per character would fire a pricing call per
+ * digit and the field would fight the user as figures came back.
+ *
+ * Clearing the box removes the override rather than setting the price to zero,
+ * because "" and 0 are different intentions and a blank field reading as free
+ * would be a very expensive misunderstanding.
+ */
+function PriceOverrideInput({
+  partId,
+  unitSell,
+  listUnitSell,
+  overridden,
+  onSet,
+}: {
+  partId: string;
+  unitSell: number;
+  listUnitSell?: number;
+  overridden?: boolean;
+  onSet: (partId: string, value: string | null) => void;
+}) {
+  const [draft, setDraft] = React.useState<string | null>(null);
+  const shown = draft ?? (overridden ? String(unitSell) : "");
+
+  const commit = () => {
+    if (draft === null) return;
+    const trimmed = draft.trim();
+    onSet(partId, trimmed === "" ? null : trimmed);
+    setDraft(null);
+  };
+
+  return (
+    <span className="relative w-24 shrink-0">
+      <input
+        type="number"
+        step="0.01"
+        min="0"
+        value={shown}
+        placeholder={money(listUnitSell ?? unitSell)}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            (e.target as HTMLInputElement).blur();
+          }
+          if (e.key === "Escape") setDraft(null);
+        }}
+        aria-label={`Agreed unit price for ${partId}`}
+        title={
+          overridden && listUnitSell !== undefined
+            ? `List ${money(listUnitSell)} — overridden`
+            : "Type an agreed unit price. Clear it to go back to list."
+        }
+        className={cn(
+          "h-6 w-full rounded border bg-background px-1 text-right text-xs tabular-nums",
+          overridden
+            ? "border-amber-500/70 font-semibold text-amber-700 dark:text-amber-300"
+            : "border-transparent hover:border-input focus:border-input"
+        )}
+      />
+    </span>
+  );
+}
+
+function UpgradeDetail({
+  pricing,
+  onOverride,
+}: {
+  pricing: PriceBreakdown;
+  onOverride: (
+    partId: string,
+    unitPrice: string | null,
+    meta?: Partial<UpgradeOverride>
+  ) => void;
+}) {
   const [open, setOpen] = React.useState(false);
   const lines = pricing.lines ?? [];
   if (lines.length === 0) return null;
@@ -873,6 +1300,18 @@ function UpgradeDetail({ pricing }: { pricing: PriceBreakdown }) {
                     <span className="w-10 text-right text-muted-foreground">
                       ×{l.qty}
                     </span>
+                    {/* The unit price is the editable one. Overriding the line
+                        total would come undone the moment the quantity
+                        changed. */}
+                    <PriceOverrideInput
+                      partId={l.partId}
+                      unitSell={l.unitSell ?? l.sell / (l.qty || 1)}
+                      listUnitSell={l.listUnitSell}
+                      overridden={l.overridden}
+                      onSet={(partId, v) =>
+                        onOverride(partId, v, { listUnitPrice: l.listUnitSell })
+                      }
+                    />
                     <span
                       className={`w-20 text-right tabular-nums ${
                         negative ? "text-success" : ""

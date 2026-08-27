@@ -95,6 +95,11 @@ import {
   type ConfiguratorRule,
   type RuleCategory,
 } from "@/types/configurator-rule";
+import {
+  SHOW_UPGRADE_OVERRIDE_FIELD,
+  readPref,
+  writePref,
+} from "@/lib/ui-prefs";
 
 const SELECT_CLASS =
   "flex h-10 w-72 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -1106,6 +1111,8 @@ export default function ConfiguratorSetupPage() {
         </Button>
       </div>
 
+      <ShowOverrideFieldToggle />
+
       {cfgDraft && (
         <div className="flex flex-wrap items-end gap-3 rounded-md border p-3">
           <div className="space-y-1.5">
@@ -1797,5 +1804,46 @@ export default function ConfiguratorSetupPage() {
         onCreate={handleCreateConfigurator}
       />
     </div>
+  );
+}
+
+/**
+ * Show the raw uqmlUpgradeOverridePrices field on the quote summary.
+ *
+ * Off by default: the field is there to be checked against QuoteLines while
+ * the column is being agreed with M1, not to be read every day. It is a view
+ * preference stored per browser, so switching it on here does not change what
+ * anyone else sees — and it never changes what is written, only whether the
+ * value is displayed.
+ */
+function ShowOverrideFieldToggle() {
+  const [on, setOn] = React.useState(false);
+  const [ready, setReady] = React.useState(false);
+
+  // Read after mount, not during render: the server has no localStorage, and
+  // reading during render would make the markup differ between the two.
+  React.useEffect(() => {
+    setOn(readPref(SHOW_UPGRADE_OVERRIDE_FIELD, false));
+    setReady(true);
+  }, []);
+
+  return (
+    <label className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+      <input
+        type="checkbox"
+        className="h-4 w-4"
+        checked={on}
+        disabled={!ready}
+        onChange={(e) => {
+          setOn(e.target.checked);
+          writePref(SHOW_UPGRADE_OVERRIDE_FIELD, e.target.checked);
+        }}
+      />
+      <span className="font-medium">Show the upgrade override field</span>
+      <span className="text-muted-foreground">
+        Displays <code className="font-mono text-xs">uqmlUpgradeOverridePrices</code>{" "}
+        read-only on the quote summary. This browser only.
+      </span>
+    </label>
   );
 }
