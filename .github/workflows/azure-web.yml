@@ -19,7 +19,9 @@ name: Deploy web to Azure
 
 on:
   push:
-    branches: [main]
+    # ci/** runs the tests on a branch without deploying, so a red run costs
+    # nothing. The deploy job is pinned to refs/heads/main below.
+    branches: [main, "ci/**"]
     paths:
       - "frontend/**"
       - ".github/workflows/azure-web.yml"
@@ -78,6 +80,40 @@ jobs:
         # the same chromium build, so one download covers the whole suite.
         run: npx playwright install --with-deps chromium
 
+      # TEMPORARY (ci/e2e-gate): the "@/..." alias resolves on Windows and not
+      # on the runner. This replays Playwright's own resolver so the answer
+      # comes from the runner rather than from guesswork. Delete before merge.
+      - name: Diagnose the path alias
+        working-directory: frontend
+        run: |
+          echo "cwd=$(pwd)"
+          echo "--- does the target exist ---"
+          ls -la src/types/door.ts src/components/ui/button.tsx || true
+          echo "--- tsconfig as the runner sees it ---"
+          cat tsconfig.json
+          echo "--- replay of playwright resolveHook ---"
+          node -e '
+            const fs=require("fs"), path=require("path");
+            const cfg=path.resolve("tsconfig.json");
+            console.log("tsconfig:", cfg, fs.existsSync(cfg));
+            const c=JSON.parse(fs.readFileSync(cfg,"utf8"));
+            const mapping=c.compilerOptions&&c.compilerOptions.paths;
+            console.log("paths mapping:", JSON.stringify(mapping));
+            console.log("baseUrl:", c.compilerOptions&&c.compilerOptions.baseUrl);
+            const pathsBase=path.dirname(cfg);
+            for (const spec of ["@/types/door","@/components/ui/button"]) {
+              const rest=spec.slice(2);
+              for (const v of (mapping&&mapping["@/*"])||[]) {
+                const cand=path.resolve(pathsBase, v.replace("*", rest));
+                const hits=["",".ts",".tsx",".js",".jsx"]
+                  .filter(e=>{const s=fs.statSync(cand+e,{throwIfNoEntry:false});return s&&s.isFile();});
+                console.log(spec, "->", cand, "| resolves as:", hits.join(",")||"NOTHING");
+              }
+            }
+          '
+          echo "--- playwright version actually installed ---"
+          node -e 'console.log(require("@playwright/test/package.json").version)'
+
       - name: Run the end-to-end tests
         working-directory: frontend
         env:
@@ -105,10 +141,10 @@ jobs:
           retention-days: 14
 
   build-and-deploy:
-    # A failing test stops the deploy. On a pull request this job is skipped
-    # entirely: `github.ref` is the PR merge ref, not refs/heads/main.
+    # A failing test stops the deploy, and only main ever deploys — a pull
+    # request or a ci/** branch runs the tests and stops there.
     needs: test
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # OIDC: azure/login exchanges a short-lived GitHub token for an Azure one,
     # so there is no client secret stored anywhere. id-token: write is what
